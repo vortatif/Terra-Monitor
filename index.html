@@ -1,0 +1,1456 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Global Earth Monitor</title>
+<style>
+:root{
+  --surface:#ffffff; --surface-2:#f1f3f4; --fg:#202124; --muted:#5f6368; --line:#dadce0;
+  --accent:#1a73e8; --on-accent:#ffffff; --good:#188038; --bad:#d93025;
+  --shadow:0 1px 2px rgba(60,64,67,.3),0 2px 6px 2px rgba(60,64,67,.15);
+  --shadow-lg:0 4px 14px rgba(60,64,67,.35);
+  color-scheme:light;
+}
+html.dark{
+  --surface:#202124; --surface-2:#303134; --fg:#e8eaed; --muted:#9aa0a6; --line:#3c4043;
+  --accent:#8ab4f8; --on-accent:#202124; --good:#81c995; --bad:#f28b82;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 2px 6px 2px rgba(0,0,0,.35);
+  --shadow-lg:0 4px 14px rgba(0,0,0,.6);
+  color-scheme:dark;
+}
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--surface-2);color:var(--fg);font-family:'Segoe UI',Roboto,system-ui,-apple-system,sans-serif;font-size:14px}
+#map{position:absolute;inset:0;z-index:1;background:#e5e3df}
+html.dark #map{background:#242f3e}
+
+button{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer}
+button:hover{background:var(--surface-2)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--on-accent);border-color:transparent;font-weight:600}
+button.primary:hover{filter:brightness(1.06)}
+input[type=checkbox],input[type=range]{accent-color:var(--accent)}
+svg{display:block}
+.icon{display:inline-flex;color:currentColor}
+
+/* ---------- Search (top-left, like Google Maps) ---------- */
+#searchWrap{position:absolute;top:12px;left:12px;z-index:1000;width:min(380px,calc(100% - 24px))}
+#searchBox{display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--fg);border-radius:24px;box-shadow:var(--shadow);padding:0 6px 0 4px;height:48px}
+.icon-btn{width:40px;height:40px;border-radius:50%;border:0;background:transparent;display:flex;align-items:center;justify-content:center;padding:0;flex:none;color:var(--fg)}
+.icon-btn:hover{background:var(--surface-2)}
+#searchInput{flex:1;min-width:0;border:0;outline:none;background:transparent;color:var(--fg);font:inherit;font-size:16px;height:100%}
+#searchInput::placeholder{color:var(--muted)}
+#searchInput::-webkit-search-cancel-button{-webkit-appearance:none;display:none}
+#suggest{list-style:none;margin:8px 0 0;padding:6px 0;background:var(--surface);border-radius:12px;box-shadow:var(--shadow-lg);max-height:340px;overflow:auto}
+#suggest:empty{display:none}
+#suggest li button{display:flex;gap:12px;align-items:flex-start;width:100%;border:0;border-radius:0;background:transparent;text-align:left;padding:10px 16px;color:var(--fg)}
+#suggest li button:hover,#suggest li button.active{background:var(--surface-2)}
+#suggest .sg-icon{color:var(--muted);margin-top:2px;flex:none}
+.sg-text{min-width:0;flex:1}
+.sg-name{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sg-sub{display:block;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sg-msg{padding:12px 16px;color:var(--muted);font-size:13px}
+
+/* ---------- Side panel (dashboard) ---------- */
+#panel{position:absolute;top:70px;left:12px;z-index:999;width:340px;max-height:calc(100% - 190px);overflow-y:auto;background:var(--surface);color:var(--fg);border-radius:12px;padding:16px 16px 12px;box-shadow:var(--shadow);scrollbar-width:thin}
+#panel.collapsed{display:none}
+.panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+h1{font-size:15px;margin:0;font-weight:600;color:var(--fg)}
+.live{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-top:4px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--good);flex:none;animation:pulse 2s infinite}
+.dot.err{background:var(--bad);animation:none}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(24,128,56,.5)}70%{box-shadow:0 0 0 7px rgba(24,128,56,0)}100%{box-shadow:0 0 0 0 rgba(24,128,56,0)}}
+#nextInfo{font-size:12px;color:var(--muted);margin-top:2px}
+.section{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.section h2{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:0 0 8px;font-weight:600}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:var(--surface-2);padding:3px;border-radius:10px}
+.seg button{border:0;background:transparent;padding:6px 0;font-size:13px}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--accent);font-weight:600;box-shadow:var(--shadow)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0}
+.row button{flex:1}
+label.check{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;margin:8px 0}
+input[type=checkbox]{width:16px;height:16px;margin:0}
+input[type=range]{width:100%}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat{background:var(--surface-2);border-radius:10px;padding:10px;min-width:0}
+.stat b{display:block;font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--muted)}
+.stat small{display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px;border:1px solid #000}
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.item{display:flex;gap:10px;align-items:center;width:100%;text-align:left;padding:8px 10px;background:var(--surface-2);border:0}
+.mag{min-width:44px;text-align:center;font-weight:700;font-variant-numeric:tabular-nums;padding:4px 0;border-radius:8px;color:#111;flex:none;border:1px solid #000}
+.txt{min-width:0;flex:1}
+.place{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{display:block;font-size:12px;color:var(--muted)}
+.hint{font-size:12px;color:var(--muted);line-height:1.5;margin:0}
+.pin{display:flex;align-items:center;gap:10px;background:var(--surface-2);border-radius:10px;padding:8px 10px}
+.pin .aqi{min-width:46px;text-align:center;font-weight:700;padding:6px 4px;border-radius:8px;font-variant-numeric:tabular-nums;flex:none}
+.pin button{padding:4px 8px;flex:none}
+.input-row{display:flex;gap:6px}
+.input-row input{flex:1;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:8px;color:var(--fg);padding:7px 9px;font:inherit}
+
+/* ---------- Map type switcher (bottom-left) ---------- */
+#typeSwitch{position:absolute;left:12px;bottom:24px;z-index:998;display:flex;gap:8px}
+.type-btn{padding:0;width:68px;border:2px solid transparent;border-radius:10px;background:var(--surface);box-shadow:var(--shadow);overflow:hidden;color:var(--fg)}
+.type-btn .sw{display:block;height:44px}
+.type-btn span{display:block;font-size:12px;padding:4px 0 5px}
+.type-btn[aria-pressed="true"]{border-color:var(--accent)}
+.sw-peta{background:linear-gradient(135deg,#cfe8c6 0 30%,#f4f1ea 30% 60%,#a9d3f5 60%)}
+.sw-satelit{background:linear-gradient(135deg,#2d4f2b,#5b6b4a 45%,#2b4a6b)}
+.sw-gelap{background:linear-gradient(135deg,#1f2a38,#2d3a4d)}
+.sw-topo{background:linear-gradient(135deg,#e7e2c6,#b9d3a0 55%,#9cc0d6)}
+
+/* ---------- Floating locate button ---------- */
+#locateFab{position:absolute;right:10px;bottom:90px;z-index:998;width:40px;height:40px;border-radius:50%;padding:0;border:0;background:var(--surface);color:var(--fg);box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center}
+
+/* ---------- Map status banner ---------- */
+#mapStatus{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1200;background:var(--surface);color:var(--fg);border-radius:10px;box-shadow:var(--shadow-lg);padding:10px 14px;font-size:13px;max-width:calc(100% - 24px);text-align:center}
+
+/* ---------- Toast ---------- */
+.toast{position:absolute;left:50%;bottom:28px;transform:translateX(-50%);z-index:1500;background:#323232;color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;box-shadow:var(--shadow-lg)}
+.toast.show{opacity:1}
+
+/* ---------- Map markers ---------- */
+.quake-recent{animation:quakeGlow 1.6s ease-in-out infinite}
+@keyframes quakeGlow{0%,100%{stroke-width:1}50%{stroke-width:4}}
+.pin-marker{width:28px;height:28px;border-radius:50%;font-weight:700;font-size:12px;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.4)}
+.search-pin{width:26px;height:26px;border-radius:50% 50% 50% 0;background:#ea4335;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+
+/* ---------- Peringatan, kebakaran, gunung api ---------- */
+.chip{font-size:11px;font-weight:700;padding:3px 7px;border-radius:6px;flex:none;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+.item:disabled{cursor:default}
+.hint code{word-break:break-all;font-size:11px}
+#sourceStatus{font-size:11px}
+.fire-icon{width:24px;height:24px}
+.fire-icon svg{width:24px;height:24px;display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
+.vol-row{display:flex;align-items:center;gap:8px;background:var(--surface-2);border-radius:10px;padding:7px 8px}
+.vol-row .chip{min-width:70px;text-align:center}
+.place-btn{flex:1;min-width:0;text-align:left;background:transparent;border:0;padding:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vol-row select{background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:4px;font:inherit;font-size:12px;max-width:110px}
+.vol-marker{width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-bottom:18px solid #80868b;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
+
+/* ---------- Leaflet overrides (theme-aware) ---------- */
+.leaflet-control-zoom a{background:var(--surface);color:var(--fg);border-color:var(--line)}
+.leaflet-control-zoom a:hover{background:var(--surface-2)}
+.leaflet-bar{border:0;box-shadow:var(--shadow)}
+.leaflet-bar a{border-bottom-color:var(--line)}
+.leaflet-control-attribution{background:rgba(255,255,255,.8)!important;color:#444;font-size:11px}
+html.dark .leaflet-control-attribution{background:rgba(32,33,36,.8)!important;color:#bbb}
+.leaflet-control-attribution a,html.dark .leaflet-control-attribution a{color:var(--accent)}
+.leaflet-popup-content-wrapper{background:var(--surface);color:var(--fg);border-radius:12px;box-shadow:var(--shadow-lg)}
+.leaflet-popup-tip{background:var(--surface);box-shadow:none}
+.leaflet-popup-content{margin:14px 16px;font-size:14px;line-height:1.45}
+.leaflet-popup-close-button{color:var(--muted)!important}
+.leaflet-container a{color:var(--accent)}
+.place-card{min-width:240px;max-width:300px}
+.pc-title{font-size:15px;font-weight:600;margin-bottom:4px;word-break:break-word}
+.pc-coord{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pc-coord button{padding:2px 8px;font-size:12px}
+.pc-aqi{margin:12px 0}
+.aqi-badge{font-size:22px;font-weight:700;padding:4px 12px;border-radius:10px;font-variant-numeric:tabular-nums}
+.muted-sm{font-size:12px;color:var(--muted);line-height:1.4}
+
+@media (max-width:640px){
+  #searchWrap{left:8px;right:8px;width:auto}
+  #panel{left:8px;right:8px;top:70px;width:auto;max-height:45%}
+  #typeSwitch{left:8px;bottom:12px}
+  #locateFab{bottom:100px}
+}
+@media (prefers-reduced-motion:reduce){
+  .dot,.quake-recent{animation:none}
+}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<!-- Search bar -->
+<div id="searchWrap">
+  <div id="searchBox">
+    <button type="button" class="icon-btn" id="menuBtn" aria-label="Tampilkan atau sembunyikan panel"><span class="icon" data-icon="menu"></span></button>
+    <input type="search" id="searchInput" placeholder="Cari tempat atau koordinat (mis. Monas Jakarta)" autocomplete="off" aria-label="Cari tempat">
+    <button type="button" class="icon-btn" id="clearBtn" aria-label="Hapus pencarian" hidden><span class="icon" data-icon="close"></span></button>
+  </div>
+  <ul id="suggest" role="listbox"></ul>
+</div>
+
+<!-- Dashboard panel -->
+<aside id="panel">
+  <div class="panel-head">
+    <div>
+      <h1>Global Earth Monitor</h1>
+      <div class="live"><span class="dot" id="liveDot"></span><span id="liveText">Menghubungkan…</span></div>
+      <div id="nextInfo"></div>
+    </div>
+    <button type="button" id="collapseBtn" aria-expanded="true" aria-controls="panel">Tutup</button>
+  </div>
+
+  <div class="section">
+    <h2>Peringatan</h2>
+    <div class="row">
+      <button type="button" id="notifBtn" class="primary" hidden>Aktifkan notifikasi</button>
+    </div>
+    <p class="hint" id="notifHint"></p>
+    <ul class="list" id="alertList" style="margin-top:8px"></ul>
+    <p class="hint" id="sourceStatus" style="margin-top:8px"></p>
+  </div>
+
+  <div class="section">
+    <h2>Rentang waktu gempa</h2>
+    <div class="seg" role="group" aria-label="Rentang waktu">
+      <button type="button" data-range="hour" aria-pressed="false">1 Jam</button>
+      <button type="button" data-range="day" aria-pressed="true">24 Jam</button>
+      <button type="button" data-range="week" aria-pressed="false">7 Hari</button>
+      <button type="button" data-range="month" aria-pressed="false">30 Hari</button>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <label for="minMag" style="font-size:13px">Magnitudo minimum</label>
+      <b id="minMagVal" style="font-variant-numeric:tabular-nums">2.5</b>
+    </div>
+    <input type="range" id="minMag" min="0" max="7" step="0.5" value="2.5">
+  </div>
+
+  <div class="section">
+    <h2>Lapisan &amp; pembaruan</h2>
+    <label class="check"><input type="checkbox" id="toggle-earthquakes" checked> Titik gempa (USGS)</label>
+    <label class="check"><input type="checkbox" id="toggle-plates" checked> Batas lempeng tektonik</label>
+    <label class="check"><input type="checkbox" id="toggle-volcano" checked> Gunung api</label>
+    <label class="check"><input type="checkbox" id="toggle-fire" checked> Titik api (kebakaran)</label>
+    <label class="check"><input type="checkbox" id="autoRefresh" checked> Perbarui otomatis tiap 60 detik</label>
+    <div class="row">
+      <button type="button" id="refreshBtn">Perbarui sekarang</button>
+      <button type="button" id="locateBtn">Lokasi saya</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Ringkasan</h2>
+    <div class="stats">
+      <div class="stat"><b id="statCount">–</b><span>Gempa terdeteksi</span></div>
+      <div class="stat"><b id="statMax">–</b><span>Magnitudo terbesar</span><small id="statMaxPlace"></small></div>
+    </div>
+    <div class="legend">
+      <span><i style="background:#ffff00"></i>&lt; 4</span>
+      <span><i style="background:#ff9900"></i>4 – 6</span>
+      <span><i style="background:#ff0000"></i>&gt; 6</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Gempa terbaru</h2>
+    <ul class="list" id="quakeList"><li class="hint">Memuat data…</li></ul>
+  </div>
+
+  <div class="section">
+    <h2>Pemantauan AQI</h2>
+    <p class="hint">Klik titik mana pun di peta untuk melihat alamat dan AQI, lalu tekan “Pantau lokasi ini”. Pantauan diperbarui tiap 10 menit.</p>
+    <div id="pinList" class="list" style="margin-top:8px"></div>
+  </div>
+
+  <div class="section">
+    <h2>Kebakaran hutan</h2>
+    <p class="hint">Titik panas dari satelit VIIRS (NASA FIRMS) di sekitar Indonesia, 24 jam terakhir. Butuh MAP_KEY gratis dari firms.modaps.eosdis.nasa.gov/api/map_key.</p>
+    <div class="input-row" style="margin-top:8px">
+      <input type="password" id="firmsKey" placeholder="Tempel MAP_KEY FIRMS" autocomplete="off" aria-label="MAP_KEY FIRMS">
+      <button type="button" id="saveFirms" class="primary">Simpan</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label for="fireThreshold" style="font-size:13px">Beri tahu jika titik api baru ≥</label>
+      <input type="number" id="fireThreshold" min="1" value="25" aria-label="Ambang titik api baru" style="width:72px;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:5px 6px;font:inherit">
+    </div>
+    <div class="row" style="margin-top:8px">
+      <label for="fireDays" style="font-size:13px">Rentang data titik api</label>
+      <select id="fireDays" aria-label="Rentang data titik api" style="background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:5px 6px;font:inherit;font-size:13px">
+        <option value="1">1 hari (UTC hari ini)</option>
+        <option value="2">2 hari</option>
+        <option value="3">3 hari</option>
+        <option value="7">7 hari</option>
+      </select>
+    </div>
+    <div class="stats" style="margin-top:8px">
+      <div class="stat"><b id="fireTotal">–</b><span>Titik panas</span></div>
+      <div class="stat"><b id="fireHigh">–</b><span>Keyakinan tinggi</span></div>
+    </div>
+    <ul class="list" id="fireTop" style="margin-top:8px"></ul>
+    <p class="hint" id="fireHint" style="margin-top:8px"></p>
+  </div>
+
+  <div class="section">
+    <h2>Gunung api</h2>
+    <p class="hint">Penanda gunung api aktif Indonesia. Status Normal sampai Awas perlu feed JSON, isi URL-nya di bawah. Bentuknya: <code>[{"name":"Merapi","level":"Siaga","updated":"2026-10-30T07:00:00Z","note":"..."}]</code></p>
+    <div class="input-row" style="margin-top:8px">
+      <input type="url" id="volcanoFeed" placeholder="URL feed JSON status" aria-label="URL feed status gunung api">
+      <button type="button" id="saveVolcano" class="primary">Simpan</button>
+    </div>
+    <p class="hint" id="volcanoHint" style="margin-top:6px">Tanpa feed, atur status tiap gunung di daftar bawah sesuai info PVMBG.</p>
+    <ul class="list" id="volcanoList" style="margin-top:8px"></ul>
+  </div>
+
+  <div class="section">
+    <h2>Token WAQI</h2>
+    <div class="input-row">
+      <input type="password" id="tokenInput" placeholder="Tempel token dari aqicn.org" autocomplete="off" aria-label="Token WAQI">
+      <button type="button" id="saveToken" class="primary">Simpan</button>
+    </div>
+    <p class="hint" id="tokenHint" style="margin-top:8px"></p>
+  </div>
+</aside>
+
+<!-- Map type switcher -->
+<div id="typeSwitch" role="group" aria-label="Jenis peta">
+  <button type="button" class="type-btn" data-type="peta" aria-pressed="true"><span class="sw sw-peta"></span><span>Peta</span></button>
+  <button type="button" class="type-btn" data-type="satelit" aria-pressed="false"><span class="sw sw-satelit"></span><span>Satelit</span></button>
+  <button type="button" class="type-btn" data-type="topo" aria-pressed="false"><span class="sw sw-topo"></span><span>Topografi</span></button>
+  <button type="button" class="type-btn" data-type="gelap" aria-pressed="false"><span class="sw sw-gelap"></span><span>Gelap</span></button>
+</div>
+
+<button type="button" id="locateFab" aria-label="Lokasi saya"><span class="icon" data-icon="locate"></span></button>
+
+<div id="mapStatus" role="status" hidden></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ============================================================
+   BOOTSTRAP: load Leaflet from the first CDN that responds
+   ============================================================ */
+const LEAFLET_BASES = [
+  'https://unpkg.com/leaflet@1.9.4/dist/',
+  'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/',
+  'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/'
+];
+function loadCss(href){
+  return new Promise((res, rej) => {
+    const l = document.createElement('link');
+    l.rel = 'stylesheet'; l.href = href; l.onload = res; l.onerror = rej;
+    document.head.appendChild(l);
+  });
+}
+function loadJs(src){
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+async function loadLeaflet(){
+  if (window.L) return true;
+  for (const base of LEAFLET_BASES){
+    try {
+      await loadCss(base + 'leaflet.css');
+      await loadJs(base + 'leaflet.js');
+      return true;
+    } catch (e) { console.warn('Leaflet gagal dari', base); }
+  }
+  return false;
+}
+function showStatus(msg){
+  const el = document.getElementById('mapStatus');
+  el.textContent = msg; el.hidden = false;
+}
+
+/* Icons are drawn at load so the UI looks right even if the map library fails */
+const ICON_PATHS = {
+  search: 'M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z',
+  pin: 'M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z',
+  menu: 'M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z',
+  close: 'M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z',
+  locate: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19a7 7 0 1 1 0-14 7 7 0 0 1 0 14z'
+};
+document.querySelectorAll('[data-icon]').forEach(el => {
+  el.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="${ICON_PATHS[el.dataset.icon]}"/></svg>`;
+});
+if (window.innerWidth < 640) {
+  document.getElementById('panel').classList.add('collapsed');
+  document.getElementById('collapseBtn').textContent = 'Buka';
+  document.getElementById('collapseBtn').setAttribute('aria-expanded', 'false');
+}
+</script>
+
+<script>
+/* ============================================================
+   APP
+   ============================================================ */
+function startApp(){
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  const ICON = {
+    search: 'M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z',
+    pin: 'M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z',
+    menu: 'M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z',
+    close: 'M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z',
+    locate: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19a7 7 0 1 1 0-14 7 7 0 0 1 0 14z'
+  };
+  const svg = (d, size = 20) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><path fill="currentColor" d="${d}"/></svg>`;
+  document.querySelectorAll('[data-icon]').forEach(el => { el.innerHTML = svg(ICON[el.dataset.icon]); });
+
+  /* ---------- 1. MAP & LAYERS ---------- */
+  const map = L.map('map', { zoomControl: false, worldCopyJump: true }).setView([0, 115], 3);
+  L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+  const TILE_STYLES = {
+    peta: () => L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO', subdomains: 'abcd', maxZoom: 20
+    }),
+    satelit: () => L.layerGroup([
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics', maxZoom: 19
+      }),
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 19
+      })
+    ]),
+    topo: () => L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+      attribution: 'Map data &copy; OpenStreetMap, SRTM | &copy; OpenTopoMap', subdomains: 'abc', maxZoom: 17
+    }),
+    gelap: () => L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO', subdomains: 'abcd', maxZoom: 20
+    })
+  };
+
+  let baseLayer = null;
+  function setMapType(key){
+    if (!TILE_STYLES[key]) key = 'peta';
+    if (baseLayer) map.removeLayer(baseLayer);
+    baseLayer = TILE_STYLES[key]();
+    baseLayer.addTo(map);
+    document.documentElement.classList.toggle('dark', key === 'gelap');
+    document.querySelectorAll('.type-btn').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.type === key)));
+    try { localStorage.setItem('map_type', key); } catch (e) {}
+  }
+  document.querySelectorAll('.type-btn').forEach(b => b.addEventListener('click', () => setMapType(b.dataset.type)));
+
+  const platesLayer = L.layerGroup().addTo(map);
+  const fireLayer = L.layerGroup().addTo(map);
+  const quakeLayer = L.layerGroup().addTo(map);
+  const volcanoLayer = L.layerGroup().addTo(map);
+  const searchLayer = L.layerGroup().addTo(map);
+  const pinLayer = L.layerGroup().addTo(map);
+
+  let initialType = 'peta';
+  try { initialType = localStorage.getItem('map_type') || 'peta'; } catch (e) {}
+  setMapType(initialType);
+
+  // Warn if tiles never arrive (blocked network or offline)
+  setTimeout(() => {
+    if (!document.querySelector('.leaflet-tile-loaded')) {
+      showStatus('Peta belum termuat. Periksa koneksi internet. Jika tetap kosong, coba buka file ini di Chrome atau Edge.');
+    } else {
+      document.getElementById('mapStatus').hidden = true;
+    }
+  }, 10000);
+
+  /* ---------- 2. STATE & HELPERS ---------- */
+  const RANGES = { hour: 'all_hour', day: 'all_day', week: 'all_week', month: 'all_month' };
+  const REFRESH_MS = 60 * 1000;
+  const state = {
+    range: 'day', minMag: 2.5, quakes: [], visible: [], markers: new Map(),
+    seen: new Set(), firstLoad: true, loading: false, nextAt: Date.now() + REFRESH_MS
+  };
+  const magOf = f => f.properties.mag ?? 0;
+  const quakeColor = m => m > 6 ? '#ff0000' : m > 4 ? '#ff9900' : '#ffff00';
+
+  function timeAgo(ts){
+    const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+    if (s < 60) return `${s} dtk lalu`;
+    const m = Math.floor(s / 60); if (m < 60) return `${m} mnt lalu`;
+    const h = Math.floor(m / 60); if (h < 24) return `${h} jam lalu`;
+    return `${Math.floor(h / 24)} hari lalu`;
+  }
+  function setLive(text, ok = true){
+    $('liveText').textContent = text;
+    $('liveDot').classList.toggle('err', !ok);
+  }
+  let toastTimer;
+  function toast(msg){
+    const t = $('toast');
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
+  }
+
+  /* ---------- 3. EARTHQUAKES (USGS real-time feeds) ---------- */
+  async function loadQuakes(){
+    if (state.loading) return;
+    state.loading = true;
+    setLive('Memperbarui…');
+    try {
+      const url = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/${RANGES[state.range]}.geojson?t=${Date.now()}`;
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const json = await res.json();
+      const feats = json.features || [];
+      if (!state.firstLoad){
+        const fresh = feats.filter(f => !state.seen.has(f.id) && magOf(f) >= state.minMag);
+        if (fresh.length) toast(`${fresh.length} gempa baru terdeteksi`);
+      }
+      state.seen = new Set(feats.map(f => f.id));
+      state.firstLoad = false;
+      state.quakes = feats;
+      renderQuakes();
+      setSourceAlerts('usgs', feats.filter(f => f.properties.tsunami === 1).map(f => ({
+        key: 'usgs-tsu-' + f.id, type: 'tsunami', sev: 'high',
+        title: `Potensi tsunami · M ${magOf(f).toFixed(1)}`,
+        body: f.properties.place || '', time: f.properties.time || Date.now(),
+        lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0]
+      })));
+      sourceStatus.USGS = 'aktif';
+      renderStatus();
+      setLive('Live · ' + new Date().toLocaleTimeString('id-ID'));
+    } catch (err){
+      console.error('USGS error:', err);
+      setLive('Gagal memuat data USGS', false);
+      sourceStatus.USGS = 'gagal';
+      renderStatus();
+    } finally {
+      state.loading = false;
+      state.nextAt = Date.now() + REFRESH_MS;
+    }
+  }
+
+  function quakePopup(f){
+    const p = f.properties, depth = f.geometry.coordinates[2];
+    return `<div style="min-width:200px">
+      <div style="font-size:18px;font-weight:700;color:${quakeColor(magOf(f))}">M ${magOf(f).toFixed(1)}</div>
+      <div>${esc(p.place)}</div>
+      <div class="muted-sm" style="margin-top:6px">${new Date(p.time).toLocaleString('id-ID')}<br>Kedalaman ${Number(depth).toFixed(1)} km · ${timeAgo(p.time)}</div>
+      ${p.tsunami === 1 ? '<div style="color:var(--accent);font-weight:700;margin-top:6px">Flag tsunami USGS aktif</div>' : ''}
+      ${p.url ? `<div style="margin-top:8px"><a href="${esc(p.url)}" target="_blank" rel="noopener">Detail di USGS ↗</a></div>` : ''}
+    </div>`;
+  }
+
+  function renderQuakes(){
+    const visible = state.quakes.filter(f => f.geometry && magOf(f) >= state.minMag);
+    state.visible = visible;
+    quakeLayer.clearLayers();
+    state.markers.clear();
+    for (const f of visible){
+      const mag = magOf(f);
+      const [lng, lat] = f.geometry.coordinates;
+      const recent = Date.now() - f.properties.time < 3600 * 1000;
+      const m = L.circleMarker([lat, lng], {
+        radius: Math.max(3, mag * 2.2),
+        fillColor: quakeColor(mag), color: f.properties.tsunami === 1 ? '#00b4ff' : '#000',
+        weight: f.properties.tsunami === 1 ? 3 : 1, fillOpacity: 0.8,
+        className: recent ? 'quake-recent' : '',
+        bubblingMouseEvents: false
+      }).bindPopup(() => quakePopup(f));
+      m.addTo(quakeLayer);
+      state.markers.set(f.id, m);
+    }
+    $('statCount').textContent = visible.length;
+    const top = visible.reduce((a, f) => (!a || magOf(f) > magOf(a)) ? f : a, null);
+    $('statMax').textContent = top ? magOf(top).toFixed(1) : '–';
+    $('statMaxPlace').textContent = top ? top.properties.place : '';
+    renderList();
+  }
+
+  function renderList(){
+    const items = [...state.visible].sort((a, b) => b.properties.time - a.properties.time).slice(0, 12);
+    $('quakeList').innerHTML = items.length ? items.map(f => `
+      <li><button type="button" class="item" data-id="${esc(f.id)}">
+        <span class="mag" style="background:${quakeColor(magOf(f))}">${magOf(f).toFixed(1)}</span>
+        <span class="txt"><span class="place">${esc(f.properties.place)}</span>
+        <span class="meta">${timeAgo(f.properties.time)} · ${Number(f.geometry.coordinates[2]).toFixed(0)} km</span></span>
+      </button></li>`).join('')
+      : '<li class="hint">Tidak ada gempa pada filter ini.</li>';
+  }
+
+  $('quakeList').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-id]');
+    if (!btn) return;
+    const f = state.quakes.find(x => x.id === btn.dataset.id);
+    if (!f) return;
+    const [lng, lat] = f.geometry.coordinates;
+    const m = state.markers.get(f.id);
+    map.flyTo([lat, lng], Math.max(map.getZoom(), 5), { duration: 1.2 });
+    if (m && map.hasLayer(quakeLayer)) map.once('moveend', () => m.openPopup());
+    else toast('Aktifkan “Titik gempa” untuk melihat marker');
+  });
+
+  /* ---------- 4. TECTONIC PLATES ---------- */
+  async function loadPlates(){
+    try {
+      const res = await fetch('https://raw.githubusercontent.com/fraxen/tectonicplates/master/GeoJSON/PB2002_boundaries.json');
+      const data = await res.json();
+      L.geoJSON(data, {
+        style: { color: '#ff4500', weight: 2, opacity: 0.7, dashArray: '5 5' },
+        interactive: false
+      }).addTo(platesLayer);
+    } catch (err){ console.error('Plates error:', err); }
+  }
+
+  /* ---------- 5. SEARCH (OpenStreetMap Nominatim) ---------- */
+  const searchInput = $('searchInput');
+  const suggest = $('suggest');
+  const COORD_RE = /^\s*(-?\d{1,2}(?:\.\d+)?)\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)\s*$/;
+  let suggestItems = [], suggestTimer, suggestSeq = 0;
+
+  function parseCoords(q){
+    const m = q.match(COORD_RE);
+    if (!m) return null;
+    const lat = +m[1], lng = +m[2];
+    return (Math.abs(lat) <= 90 && Math.abs(lng) <= 180) ? { lat, lng } : null;
+  }
+  /* Nominatim allows about one request per second. Queue requests so rapid
+     clicks or typing do not get rejected with HTTP 429. */
+  const NOM_GAP_MS = 1100;
+  let nomQueue = Promise.resolve(), nomLast = 0;
+  function nomFetch(url){
+    const run = async () => {
+      const wait = Math.max(0, nomLast + NOM_GAP_MS - Date.now());
+      if (wait) await new Promise(r => setTimeout(r, wait));
+      nomLast = Date.now();
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    };
+    const p = nomQueue.then(run, run);
+    nomQueue = p.catch(() => {});
+    return p;
+  }
+  function geocode(q){
+    return nomFetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&accept-language=id&q=${encodeURIComponent(q)}`);
+  }
+  function showSuggestMsg(msg){
+    suggest.innerHTML = `<li><div class="sg-msg">${esc(msg)}</div></li>`;
+  }
+  function renderSuggest(items){
+    suggestItems = items;
+    suggest.innerHTML = items.map((it, i) => {
+      const name = it.name || String(it.display_name).split(',')[0];
+      const sub = String(it.display_name).replace(name + ',', '').trim();
+      return `<li><button type="button" data-idx="${i}">
+        <span class="sg-icon">${svg(ICON.pin, 18)}</span>
+        <span class="sg-text"><span class="sg-name">${esc(name)}</span><span class="sg-sub">${esc(sub)}</span></span>
+      </button></li>`;
+    }).join('');
+  }
+  async function runSearch(q, pickFirst){
+    const seq = ++suggestSeq;
+    try {
+      const items = await geocode(q);
+      if (seq !== suggestSeq) return;
+      if (!items.length){ showSuggestMsg(`Tidak ada hasil untuk “${q}”`); return; }
+      if (pickFirst){ pickResult(items[0]); return; }
+      renderSuggest(items);
+    } catch (err){
+      if (seq === suggestSeq) showSuggestMsg('Pencarian gagal. Periksa koneksi internet.');
+    }
+  }
+  function pickResult(it){
+    suggest.innerHTML = '';
+    const name = it.name || String(it.display_name).split(',')[0];
+    searchInput.value = name;
+    $('clearBtn').hidden = false;
+    if (it.boundingbox){
+      const [s, n, w, e] = it.boundingbox.map(Number);
+      goTo(+it.lat, +it.lon, it.display_name, [[s, w], [n, e]]);
+    } else {
+      goTo(+it.lat, +it.lon, it.display_name);
+    }
+  }
+  function goTo(lat, lng, title, bounds){
+    const ll = L.latLng(lat, lng);
+    if (bounds) map.flyToBounds(bounds, { maxZoom: 15, duration: 1.2 });
+    else map.flyTo(ll, Math.max(map.getZoom(), 15), { duration: 1.2 });
+    searchLayer.clearLayers();
+    L.marker(ll, {
+      icon: L.divIcon({ className: '', html: '<div class="search-pin"></div>', iconSize: [26, 26], iconAnchor: [13, 26] }),
+      bubblingMouseEvents: false, keyboard: false
+    }).addTo(searchLayer);
+    map.once('moveend', () => inspectPoint(ll, title));
+  }
+
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value.trim();
+    $('clearBtn').hidden = !q;
+    clearTimeout(suggestTimer);
+    if (q.length < 3 || parseCoords(q)){ suggest.innerHTML = ''; return; }
+    suggestTimer = setTimeout(() => runSearch(q, false), 700);
+  });
+  searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Escape'){ suggest.innerHTML = ''; return; }
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const q = searchInput.value.trim();
+    if (!q) return;
+    clearTimeout(suggestTimer);
+    const c = parseCoords(q);
+    if (c){ suggest.innerHTML = ''; goTo(c.lat, c.lng, `${c.lat}, ${c.lng}`); return; }
+    runSearch(q, true);
+  });
+  suggest.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-idx]');
+    if (btn) pickResult(suggestItems[+btn.dataset.idx]);
+  });
+  $('clearBtn').addEventListener('click', () => {
+    searchInput.value = '';
+    $('clearBtn').hidden = true;
+    suggest.innerHTML = '';
+    searchLayer.clearLayers();
+    searchInput.focus();
+  });
+  document.addEventListener('click', e => {
+    if (!$('searchBox').contains(e.target) && !suggest.contains(e.target)) suggest.innerHTML = '';
+  });
+
+  /* ---------- 6. POINT INFO CARD (address + AQI + pin) ---------- */
+  const revCache = new Map();
+  async function reverseName(ll){
+    const key = ll.lat.toFixed(4) + ',' + ll.lng.toFixed(4);
+    if (revCache.has(key)) return revCache.get(key);
+    const j = await nomFetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&accept-language=id&lat=${ll.lat}&lon=${ll.lng}`);
+    const name = j.display_name || '';
+    revCache.set(key, name);
+    return name;
+  }
+
+  function inspectPoint(ll, title){
+    const coordText = `${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}`;
+    let placeName = title || '';
+    const el = document.createElement('div');
+    el.className = 'place-card';
+    el.innerHTML = `
+      <div class="pc-title">${esc(title || 'Memuat alamat…')}</div>
+      <div class="pc-coord"><span>${coordText}</span><button type="button" class="copyBtn">Salin</button></div>
+      <div class="pc-aqi"><span class="muted-sm">Memuat AQI…</span></div>
+      <div><button type="button" class="pinBtn primary">Pantau lokasi ini</button></div>`;
+
+    el.querySelector('.copyBtn').addEventListener('click', () => {
+      navigator.clipboard?.writeText(coordText)
+        .then(() => toast('Koordinat disalin'))
+        .catch(() => toast('Gagal menyalin, salin manual dari teks'));
+    });
+    el.querySelector('.pinBtn').addEventListener('click', () => {
+      addPin(ll, placeName || coordText);
+    });
+
+    const popup = L.popup({ maxWidth: 320, autoPanPadding: [60, 60] })
+      .setLatLng(ll).setContent(el).openOn(map);
+
+    if (!title){
+      reverseName(ll)
+        .then(name => {
+          placeName = name || coordText;
+          el.querySelector('.pc-title').textContent = name || 'Lokasi tanpa nama alamat';
+        })
+        .catch(() => {
+          placeName = coordText;
+          el.querySelector('.pc-title').textContent = 'Alamat tidak tersedia';
+        });
+    }
+
+    const aqiBox = el.querySelector('.pc-aqi');
+    if (!getToken()){
+      aqiBox.innerHTML = '<span class="muted-sm">Isi token WAQI di panel untuk melihat kualitas udara.</span>';
+    } else {
+      fetchAQI(ll.lat.toFixed(4), ll.lng.toFixed(4))
+        .then(d => renderAqiBlock(aqiBox, d))
+        .catch(err => { aqiBox.innerHTML = `<span class="muted-sm">${esc(aqiErrorText(err))}</span>`; });
+    }
+    return popup;
+  }
+
+  map.on('click', e => {
+    suggest.innerHTML = '';
+    inspectPoint(e.latlng);
+  });
+
+  function locate(){
+    if (!navigator.geolocation){ toast('Browser tidak mendukung lokasi'); return; }
+    navigator.geolocation.getCurrentPosition(pos => {
+      const ll = L.latLng(pos.coords.latitude, pos.coords.longitude);
+      map.flyTo(ll, 14, { duration: 1.2 });
+      map.once('moveend', () => inspectPoint(ll, 'Lokasi Anda'));
+    }, () => toast('Izin lokasi ditolak atau tidak tersedia'), { timeout: 10000 });
+  }
+  $('locateBtn').addEventListener('click', locate);
+  $('locateFab').addEventListener('click', locate);
+
+  /* ---------- 7. AQI (WAQI) + PINS ---------- */
+  const AQI_LEVELS = [
+    { max: 50,       label: 'Baik',                                 bg: '#009966', fg: '#fff' },
+    { max: 100,      label: 'Sedang',                               bg: '#ffde33', fg: '#1a1a1a' },
+    { max: 150,      label: 'Tidak sehat untuk kelompok sensitif',  bg: '#ff9933', fg: '#1a1a1a' },
+    { max: 200,      label: 'Tidak sehat',                          bg: '#cc0033', fg: '#fff' },
+    { max: 300,      label: 'Sangat tidak sehat',                   bg: '#660099', fg: '#fff' },
+    { max: Infinity, label: 'Berbahaya',                            bg: '#7e0023', fg: '#fff' }
+  ];
+  const aqiLevel = v => AQI_LEVELS.find(l => v <= l.max);
+
+  const getToken = () => { try { return localStorage.getItem('waqi_token') || ''; } catch (e) { return ''; } };
+  const setToken = t => { try { t ? localStorage.setItem('waqi_token', t) : localStorage.removeItem('waqi_token'); } catch (e) {} };
+
+  function renderTokenHint(){
+    const has = !!getToken();
+    $('tokenInput').placeholder = has ? '•••••• tersimpan' : 'Tempel token dari aqicn.org';
+    $('tokenHint').textContent = has
+      ? 'Token tersimpan di browser ini. Simpan dengan kolom kosong untuk menghapusnya.'
+      : 'Belum ada token. Dapatkan gratis di aqicn.org/data-platform/token';
+  }
+  $('saveToken').addEventListener('click', () => {
+    const v = $('tokenInput').value.trim();
+    setToken(v);
+    $('tokenInput').value = '';
+    renderTokenHint();
+    toast(v ? 'Token disimpan' : 'Token dihapus');
+    refreshPins();
+  });
+
+  async function fetchAQI(lat, lng){
+    const token = getToken();
+    if (!token) throw new Error('NO_TOKEN');
+    const res = await fetch(`https://api.waqi.info/feed/geo:${lat};${lng}/?token=${encodeURIComponent(token)}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    if (json.status !== 'ok'){
+      const msg = String(json.data || '');
+      throw new Error(/invalid key/i.test(msg) ? 'BAD_TOKEN' : /quota/i.test(msg) ? 'QUOTA' : 'NO_DATA');
+    }
+    const d = json.data;
+    const aqi = Number(d.aqi);
+    if (!Number.isFinite(aqi)) throw new Error('NO_DATA');
+    return { aqi, station: d.city?.name || 'Stasiun tanpa nama', pm25: d.iaqi?.pm25?.v, time: d.time?.s };
+  }
+  function aqiErrorText(err){
+    switch (err.message){
+      case 'NO_TOKEN':  return 'Isi token WAQI di panel untuk melihat AQI.';
+      case 'BAD_TOKEN': return 'Token WAQI tidak valid. Periksa lagi di panel.';
+      case 'QUOTA':     return 'Kuota harian token WAQI sudah habis. Coba lagi besok.';
+      case 'NO_DATA':   return 'Tidak ada stasiun sensor udara dekat titik ini.';
+      default:          return 'Gagal mengambil data AQI. Periksa koneksi internet.';
+    }
+  }
+  function renderAqiBlock(box, d){
+    const lv = aqiLevel(d.aqi);
+    box.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="aqi-badge" style="background:${lv.bg};color:${lv.fg}">${d.aqi}</span>
+        <div>
+          <div style="font-weight:600">${esc(lv.label)}</div>
+          <div class="muted-sm">Kualitas udara · ${esc(d.station)}${d.pm25 != null ? ' · PM2.5 ' + esc(d.pm25) : ''}</div>
+        </div>
+      </div>`;
+  }
+
+  const PIN_KEY = 'aqi_pins';
+  let pins = [];
+  try { pins = JSON.parse(localStorage.getItem(PIN_KEY) || '[]'); } catch (e) { pins = []; }
+  const pinData = new Map();
+  const savePins = () => { try { localStorage.setItem(PIN_KEY, JSON.stringify(pins)); } catch (e) {} };
+
+  function addPin(ll, name){
+    if (pins.length >= 12){ toast('Maksimal 12 lokasi pantauan'); return; }
+    if (!getToken()){ toast('Isi token WAQI dulu di panel'); return; }
+    pins.push({ id: Date.now().toString(36), name, lat: ll.lat, lng: ll.lng });
+    savePins();
+    map.closePopup();
+    renderPins();
+    refreshPins();
+    toast('Lokasi ditambahkan ke pantauan');
+  }
+  function removePin(id){
+    pins = pins.filter(p => p.id !== id);
+    pinData.delete(id);
+    savePins();
+    renderPins();
+  }
+  function renderPins(){
+    pinLayer.clearLayers();
+    pins.forEach(p => {
+      const d = pinData.get(p.id);
+      const lv = d ? aqiLevel(d.aqi) : null;
+      const icon = L.divIcon({
+        className: '',
+        html: `<div class="pin-marker" style="background:${lv ? lv.bg : '#1a73e8'};color:${lv ? lv.fg : '#fff'}">${d ? d.aqi : '?'}</div>`,
+        iconSize: [28, 28], iconAnchor: [14, 14]
+      });
+      L.marker([p.lat, p.lng], { icon, bubblingMouseEvents: false }).bindTooltip(esc(p.name)).addTo(pinLayer);
+    });
+    $('pinList').innerHTML = pins.length ? pins.map(p => {
+      const d = pinData.get(p.id);
+      const lv = d ? aqiLevel(d.aqi) : null;
+      return `<div class="pin">
+        <span class="aqi" style="background:${lv ? lv.bg : 'var(--line)'};color:${lv ? lv.fg : 'var(--muted)'}">${d ? d.aqi : '…'}</span>
+        <span class="txt"><span class="place">${esc(p.name)}</span>
+        <span class="meta">${lv ? esc(lv.label) : 'Memuat…'}</span></span>
+        <button type="button" data-remove="${esc(p.id)}" aria-label="Hapus pantauan">✕</button>
+      </div>`;
+    }).join('') : '<p class="hint">Belum ada lokasi dipantau.</p>';
+  }
+  $('pinList').addEventListener('click', e => {
+    const b = e.target.closest('[data-remove]');
+    if (b) removePin(b.dataset.remove);
+  });
+  async function refreshPins(){
+    if (!pins.length || !getToken()){ renderPins(); return; }
+    await Promise.all(pins.map(async p => {
+      try { pinData.set(p.id, await fetchAQI(p.lat.toFixed(4), p.lng.toFixed(4))); }
+      catch (e) { /* keep last known value */ }
+    }));
+    renderPins();
+  }
+  setInterval(refreshPins, 10 * 60 * 1000);
+
+  /* ---------- 8. PANEL CONTROLS ---------- */
+  function bindToggle(id, layer){
+    $(id).addEventListener('change', e => {
+      if (e.target.checked) map.addLayer(layer); else map.removeLayer(layer);
+    });
+  }
+  bindToggle('toggle-earthquakes', quakeLayer);
+  bindToggle('toggle-plates', platesLayer);
+
+  document.querySelectorAll('[data-range]').forEach(b => b.addEventListener('click', () => {
+    state.range = b.dataset.range;
+    state.firstLoad = true;
+    document.querySelectorAll('[data-range]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    loadQuakes();
+  }));
+  $('minMag').addEventListener('input', e => {
+    state.minMag = parseFloat(e.target.value);
+    $('minMagVal').textContent = state.minMag.toFixed(1);
+    renderQuakes();
+  });
+  $('refreshBtn').addEventListener('click', () => refreshAll());
+
+  function setPanel(open){
+    $('panel').classList.toggle('collapsed', !open);
+    $('collapseBtn').textContent = open ? 'Tutup' : 'Buka';
+    $('collapseBtn').setAttribute('aria-expanded', String(open));
+  }
+  $('collapseBtn').addEventListener('click', () => setPanel($('panel').classList.contains('collapsed')));
+  $('menuBtn').addEventListener('click', () => setPanel($('panel').classList.contains('collapsed')));
+
+  /* ---------- 9. LIVE TICK ---------- */
+  let ticks = 0;
+  setInterval(() => {
+    ticks++;
+    const auto = $('autoRefresh').checked;
+    if (auto && !state.loading && Date.now() >= state.nextAt) loadQuakes();
+    const left = Math.max(0, Math.ceil((state.nextAt - Date.now()) / 1000));
+    $('nextInfo').textContent = !auto ? 'Perbarui otomatis dimatikan'
+      : state.loading ? 'Memperbarui…'
+      : `Perbarui berikutnya dalam ${left} dtk`;
+    if (ticks % 15 === 0){ renderList(); renderAlerts(); }
+  }, 1000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && Date.now() >= state.nextAt) loadQuakes();
+  });
+
+  /* ============================================================
+     11. PERINGATAN: tsunami, gunung api, kebakaran + notifikasi
+     ============================================================ */
+  const CONFIG = {
+    bmkgUrl: 'https://data.bmkg.go.id/DataMKG/TEWS/gempaterkini.json',
+    firmsSource: 'VIIRS_SNPP_NRT',
+    // Indonesia dibagi 3 kotak (barat, selatan, timur, utara) agar tiap permintaan lebih kecil
+    firmsBoxes: ['95,-11,107.99,6', '108,-11,123.99,6', '124,-11,141,6'],
+    bmkgRefreshMs: 5 * 60 * 1000,
+    volcanoRefreshMs: 10 * 60 * 1000,
+    fireRefreshMs: 10 * 60 * 1000
+  };
+  const LS = {
+    get(k, d){ try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  };
+  const SEV = {
+    info:     { bg: '#1a73e8', fg: '#fff' },
+    high:     { bg: '#f9ab00', fg: '#202124' },
+    critical: { bg: '#d93025', fg: '#fff' }
+  };
+  const TYPE_LABEL = { tsunami: 'Tsunami', gunung: 'Gunung api', kebakaran: 'Kebakaran' };
+  const VOL_LEVELS = {
+    1: { label: 'Normal',  bg: '#188038', fg: '#fff' },
+    2: { label: 'Waspada', bg: '#f9ab00', fg: '#202124' },
+    3: { label: 'Siaga',   bg: '#fa7b17', fg: '#fff' },
+    4: { label: 'Awas',    bg: '#d93025', fg: '#fff' }
+  };
+  const VOL_LEVEL_BY_NAME = { normal: 1, waspada: 2, siaga: 3, awas: 4 };
+  // Gunung api aktif Indonesia. Koordinat perkiraan, dipakai untuk penanda di peta.
+  const VOLCANOES = [
+    { name: 'Sinabung', lat: 3.17, lng: 98.39 },
+    { name: 'Marapi', lat: -0.38, lng: 100.47 },
+    { name: 'Dukono', lat: 1.69, lng: 127.88 },
+    { name: 'Ibu', lat: 1.49, lng: 127.63 },
+    { name: 'Soputan', lat: 1.11, lng: 124.73 },
+    { name: 'Ruang', lat: 2.30, lng: 125.37 },
+    { name: 'Karangetang', lat: 2.78, lng: 125.41 },
+    { name: 'Lewotobi Laki-laki', lat: -8.54, lng: 122.77 },
+    { name: 'Lewotolok', lat: -8.27, lng: 123.51 },
+    { name: 'Semeru', lat: -8.11, lng: 112.92 },
+    { name: 'Bromo', lat: -7.94, lng: 112.95 },
+    { name: 'Merapi', lat: -7.54, lng: 110.45 },
+    { name: 'Kelud', lat: -7.93, lng: 112.31 },
+    { name: 'Raung', lat: -8.13, lng: 114.04 },
+    { name: 'Agung', lat: -8.34, lng: 115.51 },
+    { name: 'Anak Krakatau', lat: -6.10, lng: 105.42 }
+  ];
+  const normName = s => String(s || '').toLowerCase().replace(/[^a-z]/g, '');
+  const findVolcano = name => VOLCANOES.find(v => normName(v.name) === normName(name));
+
+  /* ---- Penyimpanan peringatan & notifikasi ---- */
+  const alertState = {
+    seen: new Set(LS.get('alert_seen', [])),
+    booted: new Set(LS.get('alert_booted', []))
+  };
+  const alertSrc = {};     // sumber -> peringatan terbaru dari sumber itu
+  const alertLog = [];     // update kebakaran (sesi ini)
+  const sourceStatus = {}; // sumber -> status teks
+
+  function saveAlertState(){
+    LS.set('alert_seen', [...alertState.seen].slice(-2000));
+    LS.set('alert_booted', [...alertState.booted]);
+  }
+  function notifyUser(it){
+    if (!('Notification' in window) || Notification.permission !== 'granted') return false;
+    try { new Notification(it.title, { body: it.body || '', tag: it.key }); return true; }
+    catch (e) { return false; }
+  }
+  function announce(items){
+    const delivered = items.slice(0, 3).map(it => notifyUser(it)).filter(Boolean).length;
+    if (!delivered) toast(items[0].title + (items.length > 1 ? ` (+${items.length - 1} lainnya)` : ''));
+  }
+  // Sumber yang baru pertama kali dibuka hanya diisi ke daftar, tanpa notifikasi.
+  function setSourceAlerts(source, items){
+    const firstRun = !alertState.booted.has(source);
+    const fresh = [];
+    for (const it of items){
+      if (alertState.seen.has(it.key)) continue;
+      alertState.seen.add(it.key);
+      if (!firstRun) fresh.push(it);
+    }
+    alertState.booted.add(source);
+    saveAlertState();
+    alertSrc[source] = items;
+    if (fresh.length) announce(fresh);
+    renderAlerts();
+  }
+  function pushLog(it){
+    alertLog.unshift(it);
+    alertLog.length = Math.min(alertLog.length, 30);
+    announce([it]);
+    renderAlerts();
+  }
+  function renderStatus(){
+    $('sourceStatus').textContent = Object.entries(sourceStatus).map(([k, v]) => `${k}: ${v}`).join(' · ');
+  }
+  function renderAlerts(){
+    const all = [...Object.values(alertSrc).flat(), ...alertLog]
+      .sort((a, b) => b.time - a.time).slice(0, 30);
+    $('alertList').innerHTML = all.length ? all.map(it => {
+      const s = SEV[it.sev] || SEV.info;
+      const hasPos = Number.isFinite(it.lat) && Number.isFinite(it.lng);
+      return `<li><button type="button" class="item" ${hasPos ? `data-lat="${it.lat}" data-lng="${it.lng}"` : 'disabled'}>
+        <span class="chip" style="background:${s.bg};color:${s.fg}">${esc(TYPE_LABEL[it.type] || 'Info')}</span>
+        <span class="txt"><span class="place">${esc(it.title)}</span>
+        <span class="meta">${it.body ? esc(it.body) + ' · ' : ''}${timeAgo(it.time)}</span></span>
+      </button></li>`;
+    }).join('') : '<li class="hint">Belum ada peringatan. Tsunami, gunung api, dan kebakaran akan tampil di sini.</li>';
+    renderStatus();
+  }
+  function flyOnClick(id){
+    $(id).addEventListener('click', e => {
+      const b = e.target.closest('button[data-lat]');
+      if (!b) return;
+      map.flyTo([+b.dataset.lat, +b.dataset.lng], Math.max(map.getZoom(), 6), { duration: 1.2 });
+    });
+  }
+  flyOnClick('alertList'); flyOnClick('volcanoList'); flyOnClick('fireTop');
+
+  /* ---- Notifikasi browser ---- */
+  function renderNotifUi(){
+    const perm = 'Notification' in window ? Notification.permission : 'unsupported';
+    $('notifBtn').hidden = perm !== 'default';
+    $('notifHint').textContent =
+      perm === 'granted' ? 'Notifikasi browser aktif. Notifikasi tetap muncul saat kamu membuka tab lain, selama halaman ini terbuka.'
+      : perm === 'denied' ? 'Notifikasi diblokir di pengaturan browser. Peringatan tetap tampil di daftar ini.'
+      : perm === 'default' ? 'Aktifkan notifikasi browser untuk peringatan tsunami, gunung api, dan kebakaran.'
+      : 'Browser ini tidak mendukung notifikasi. Peringatan tetap tampil di daftar ini.';
+  }
+  $('notifBtn').addEventListener('click', async () => {
+    try { await Notification.requestPermission(); } catch (e) {}
+    renderNotifUi();
+  });
+
+  /* ---- BMKG: gempa dengan potensi tsunami (Indonesia) ---- */
+  async function loadBmkg(){
+    try {
+      const res = await fetch(CONFIG.bmkgUrl, { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const json = await res.json();
+      const items = [];
+      for (const g of [].concat(json?.Infogempa?.gempa ?? [])){
+        const pot = String(g.Potensi || '');
+        if (!/berpotensi\s+tsunami/i.test(pot) || /tidak\s+berpotensi/i.test(pot)) continue;
+        const [lat, lng] = String(g.Coordinates || '').split(',').map(Number);
+        items.push({
+          key: 'bmkg-' + (g.DateTime || (g.Tanggal + g.Jam)),
+          type: 'tsunami', sev: 'critical',
+          title: `BMKG: potensi tsunami · M ${g.Magnitude ?? '?'}`,
+          body: [g.Wilayah, g.Kedalaman].filter(Boolean).join(' · '),
+          time: Date.parse(g.DateTime) || Date.now(), lat, lng
+        });
+      }
+      setSourceAlerts('bmkg', items);
+      sourceStatus.BMKG = 'aktif';
+    } catch (err){
+      console.warn('BMKG:', err);
+      sourceStatus.BMKG = 'gagal (mungkin diblokir)';
+    }
+    renderStatus();
+  }
+
+  /* ---- Gunung api: penanda + status dari feed yang kamu isi ---- */
+  let feedStatus = new Map(); // status dari feed JSON
+  // Status manual (dipilih di panel) dipakai jika feed tidak ada; feed menimpa manual
+  function mergedStatus(){
+    const m = new Map();
+    for (const [k, lv] of Object.entries(LS.get('volcano_manual', {}))){
+      const v = VOLCANOES.find(x => normName(x.name) === k);
+      if (v && VOL_LEVELS[lv]) m.set(k, { name: v.name, level: lv, updated: '', note: 'Diisi manual di panel' });
+    }
+    for (const [k, st] of feedStatus) m.set(k, st);
+    return m;
+  }
+  function setVolcanoHint(t){ $('volcanoHint').textContent = t; }
+  $('volcanoList').addEventListener('change', e => {
+    const sel = e.target.closest('select[data-manual]');
+    if (!sel) return;
+    const key = sel.dataset.manual, lv = Number(sel.value) || 0;
+    const m = LS.get('volcano_manual', {});
+    if (lv) m[key] = lv; else delete m[key];
+    LS.set('volcano_manual', m);
+    const v = VOLCANOES.find(x => normName(x.name) === key);
+    if (lv >= 2 && v) pushLog({
+      key: `manual-${key}-${lv}-${Date.now()}`, type: 'gunung',
+      sev: lv >= 4 ? 'critical' : lv >= 3 ? 'high' : 'info',
+      title: `${v.name}: status ${VOL_LEVELS[lv].label} (manual)`,
+      body: 'Diubah di panel Gunung api', time: Date.now(), lat: v.lat, lng: v.lng
+    });
+    renderVolcanoes();
+  });
+  async function loadVolcanoFeed(){
+    const url = LS.get('volcano_feed', '');
+    if (!url){
+      feedStatus = new Map();
+      setVolcanoHint('Tanpa feed, atur status tiap gunung di daftar bawah sesuai info PVMBG.');
+      sourceStatus.Gunung = 'feed belum diisi';
+      renderStatus();
+      renderVolcanoes();
+      return;
+    }
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const json = await res.json();
+      const rows = Array.isArray(json) ? json : (json.data || json.volcanoes || []);
+      feedStatus = new Map();
+      const items = [];
+      for (const v of rows){
+        const level = typeof v.level === 'string' ? VOL_LEVEL_BY_NAME[v.level.toLowerCase()] : Number(v.level);
+        if (!VOL_LEVELS[level] || !v.name) continue;
+        feedStatus.set(normName(v.name), { name: v.name, level, updated: v.updated || '', note: v.note || '' });
+        if (level < 2) continue;
+        const known = findVolcano(v.name);
+        items.push({
+          key: `vol-${normName(v.name)}-${level}-${v.updated || ''}`,
+          type: 'gunung', sev: level >= 4 ? 'critical' : level >= 3 ? 'high' : 'info',
+          title: `${v.name}: status ${VOL_LEVELS[level].label}`,
+          body: v.note || 'Dari feed status',
+          time: Date.parse(v.updated) || Date.now(),
+          lat: known?.lat, lng: known?.lng
+        });
+      }
+      setSourceAlerts('gunung', items);
+      sourceStatus.Gunung = 'aktif';
+      setVolcanoHint('Status feed dibaca. Status manual tetap bisa diubah di daftar bawah.');
+    } catch (err){
+      console.warn('Feed gunung api:', err);
+      sourceStatus.Gunung = 'feed gagal dibaca';
+      setVolcanoHint('Feed tidak bisa dibaca. Pastikan URL menghasilkan JSON dan bisa diakses dari browser. Status manual di bawah tetap dipakai.');
+    }
+    renderStatus();
+    renderVolcanoes();
+  }
+  function volcanoPopup(v, st){
+    const lv = st ? VOL_LEVELS[st.level] : null;
+    return `<div style="min-width:200px">
+      <div style="font-size:16px;font-weight:700">Gunung ${esc(v.name)}</div>
+      <div style="margin:8px 0">${lv
+        ? `<span class="chip" style="background:${lv.bg};color:${lv.fg}">Status ${esc(lv.label)}</span>`
+        : '<span class="muted-sm">Status belum tersedia dari feed</span>'}</div>
+      ${st && st.note ? `<div>${esc(st.note)}</div>` : ''}
+      ${st && st.updated ? `<div class="muted-sm" style="margin-top:6px">Diperbarui: ${esc(st.updated)}</div>` : ''}
+      <div style="margin-top:8px"><a href="https://magma.esdm.go.id/" target="_blank" rel="noopener">Sumber resmi PVMBG ↗</a></div>
+    </div>`;
+  }
+  function renderVolcanoes(){
+    volcanoLayer.clearLayers();
+    const volcanoStatus = mergedStatus();
+    for (const v of VOLCANOES){
+      const st = volcanoStatus.get(normName(v.name));
+      const lv = st ? VOL_LEVELS[st.level] : null;
+      const icon = L.divIcon({
+        className: '',
+        html: `<div class="vol-marker" style="border-bottom-color:${lv ? lv.bg : '#80868b'}"></div>`,
+        iconSize: [20, 18], iconAnchor: [10, 18]
+      });
+      L.marker([v.lat, v.lng], { icon, bubblingMouseEvents: false, title: v.name })
+        .bindPopup(() => volcanoPopup(v, st)).addTo(volcanoLayer);
+    }
+    const manualMap = LS.get('volcano_manual', {});
+    $('volcanoList').innerHTML = VOLCANOES.map(v => {
+      const key = normName(v.name);
+      const st = volcanoStatus.get(key);
+      const lv = st ? VOL_LEVELS[st.level] : null;
+      const manual = manualMap[key] || 0;
+      return `<li class="vol-row">
+        <span class="chip" style="background:${lv ? lv.bg : 'var(--line)'};color:${lv ? lv.fg : 'var(--muted)'}">${lv ? esc(lv.label) : '–'}</span>
+        <button type="button" class="place-btn" data-lat="${v.lat}" data-lng="${v.lng}">${esc(v.name)}</button>
+        <select data-manual="${key}" aria-label="Status manual ${esc(v.name)}">
+          <option value="0">Manual: –</option>
+          ${[1, 2, 3, 4].map(n => `<option value="${n}"${manual === n ? ' selected' : ''}>${VOL_LEVELS[n].label}</option>`).join('')}
+        </select>
+      </li>`;
+    }).join('');
+  }
+
+  /* ---- Kebakaran: titik panas NASA FIRMS (VIIRS) ---- */
+  const FIRE_COLOR = { h: '#ff3b00', n: '#ff9800', l: '#ffd54f' };
+  const FIRE_LABEL = { h: 'tinggi', n: 'sedang', l: 'rendah' };
+  const FLAME_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2c.6 3.2 4.6 5.4 4.6 10.2A4.6 4.6 0 0 1 12 17a4.6 4.6 0 0 1-4.6-4.8c0-2 1-3.4 2.1-4.6.1 1.5.6 2.6 1.6 3.3C10.9 7.4 11.6 4.8 12 2z"/></svg>';
+  function haversineKm(lat1, lng1, lat2, lng2){
+    const R = 6371, toRad = x => x * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+  // Gabungkan titik panas yang berdekatan (<= maxKm, terhubung berantai) jadi satu area api
+  function clusterHotspots(rows, maxKm){
+    const CELL = 0.03; // sekitar 3 km per sel, lebih besar dari maxKm
+    const grid = new Map();
+    const cellKey = (i, j) => i + ',' + j;
+    const cell = rows.map(r => [Math.floor(r.lat / CELL), Math.floor(r.lng / CELL)]);
+    const parent = rows.map((_, i) => i);
+    const find = i => { while (parent[i] !== i){ parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+    rows.forEach((r, i) => {
+      const k = cellKey(cell[i][0], cell[i][1]);
+      if (!grid.has(k)) grid.set(k, []);
+      grid.get(k).push(i);
+    });
+    rows.forEach((r, i) => {
+      for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++){
+        for (const j of (grid.get(cellKey(cell[i][0] + di, cell[i][1] + dj)) || [])){
+          if (j <= i) continue;
+          if (haversineKm(r.lat, r.lng, rows[j].lat, rows[j].lng) <= maxKm){
+            const a = find(i), b = find(j);
+            if (a !== b) parent[b] = a;
+          }
+        }
+      }
+    });
+    const groups = new Map();
+    rows.forEach((r, i) => {
+      const root = find(i);
+      if (!groups.has(root)) groups.set(root, []);
+      groups.get(root).push(r);
+    });
+    return [...groups.values()].map(pts => {
+      const n = pts.length;
+      const lat = pts.reduce((s, p) => s + p.lat, 0) / n, lng = pts.reduce((s, p) => s + p.lng, 0) / n;
+      const spread = pts.reduce((m, p) => Math.max(m, haversineKm(p.lat, p.lng, lat, lng)), 0);
+      return {
+        lat, lng, n,
+        high: pts.filter(p => p.conf === 'h').length,
+        conf: pts.some(p => p.conf === 'h') ? 'h' : pts.some(p => p.conf === 'n') ? 'n' : 'l',
+        frp: pts.reduce((s, p) => s + p.frp, 0),
+        radiusKm: Math.max(1, spread + 0.375), // 0.375 km = setengah piksel VIIRS
+        last: pts.reduce((m, p) => (p.when > m ? p.when : m), '')
+      };
+    });
+  }
+  function firePopup(c){
+    return `<div style="min-width:220px">
+      <div style="font-size:16px;font-weight:700;color:${FIRE_COLOR[c.conf]}">Kebakaran (perkiraan)</div>
+      <div style="margin:6px 0">Radius sebaran ± ${c.radiusKm.toFixed(1)} km</div>
+      <div class="muted-sm">${c.n} titik panas · ${c.high} keyakinan tinggi<br>FRP total ${c.frp.toFixed(0)} MW<br>Terakhir: ${esc(c.last)} UTC</div>
+      <div class="muted-sm" style="margin-top:8px">Perkiraan dari sebaran titik panas satelit, bukan luas area terbakar resmi.</div>
+    </div>`;
+  }
+  let fireSeen = new Set(LS.get('fire_seen', []));
+  let fireBooted = LS.get('fire_booted', false);
+  let fireData = [];
+
+  function parseCsv(text){
+    const lines = text.trim().split(/\r?\n/);
+    const head = lines[0].split(',').map(s => s.trim().toLowerCase());
+    return lines.slice(1).map(line => {
+      const cells = line.split(',');
+      const o = {};
+      head.forEach((h, i) => { o[h] = (cells[i] || '').trim(); });
+      return o;
+    });
+  }
+  // VIIRS memakai huruf (l/n/h), MODIS memakai angka 0-100
+  function fireConf(c){
+    if (/^\d+$/.test(c)) return Number(c) >= 80 ? 'h' : Number(c) >= 30 ? 'n' : 'l';
+    const k = String(c).toLowerCase().charAt(0);
+    return FIRE_COLOR[k] ? k : 'n';
+  }
+  async function loadFires(){
+    const key = String(LS.get('firms_key', '') || '').trim();
+    if (!key){
+      sourceStatus.FIRMS = 'MAP_KEY belum diisi';
+      $('fireHint').textContent = 'Isi MAP_KEY FIRMS di atas untuk melihat titik api.';
+      renderStatus();
+      return;
+    }
+    try {
+      const days = Math.min(10, Math.max(1, +LS.get('fire_days', 2) || 2));
+      const texts = await Promise.all(CONFIG.firmsBoxes.map(async box => {
+        const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${encodeURIComponent(key)}/${CONFIG.firmsSource}/${box}/${days}`;
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const t = await res.text();
+        if (!/latitude/i.test(t.split('\n')[0])) throw new Error(t.slice(0, 120));
+        return t;
+      }));
+      const rows = texts.flatMap(t => parseCsv(t)).map(r => ({
+        lat: +r.latitude, lng: +r.longitude, frp: +r.frp || 0,
+        conf: fireConf(r.confidence || ''),
+        when: `${r.acq_date || ''} ${r.acq_time || ''}`.trim(),
+        key: `${r.latitude},${r.longitude},${r.acq_date},${r.acq_time}`
+      })).filter(r => Number.isFinite(r.lat) && Number.isFinite(r.lng));
+
+      const high = rows.filter(r => r.conf === 'h');
+      const newHigh = high.filter(r => !fireSeen.has(r.key));
+      // Hanya titik keyakinan tinggi yang dilacak untuk notifikasi, agar daftar tidak membengkak
+      high.forEach(r => fireSeen.add(r.key));
+      if (fireSeen.size > 20000) fireSeen = new Set([...fireSeen].slice(-15000));
+      LS.set('fire_seen', [...fireSeen]);
+
+      if (!fireBooted){
+        fireBooted = true;
+        LS.set('fire_booted', true);
+      } else {
+        const threshold = Math.max(1, +LS.get('fire_threshold', 25) || 25);
+        if (newHigh.length >= threshold){
+          const top = newHigh.reduce((a, b) => (!a || b.frp > a.frp) ? b : a, null);
+          pushLog({
+            key: 'fire-' + Date.now(), type: 'kebakaran', sev: 'high',
+            title: `Titik api baru: ${newHigh.length} (keyakinan tinggi)`,
+            body: `Terbaru ${top.when} UTC · FRP tertinggi ${top.frp.toFixed(1)} MW`,
+            time: Date.now(), lat: top.lat, lng: top.lng
+          });
+        }
+      }
+
+      fireData = rows;
+      renderFires(high, rows);
+      sourceStatus.FIRMS = 'aktif';
+      $('fireHint').textContent = rows.length
+        ? `Diperbarui ${new Date().toLocaleTimeString('id-ID')}. Sumber: VIIRS via NASA FIRMS. Ikon api = kumpulan titik panas. Lingkaran = perkiraan sebaran (min. 1 km), bukan luas resmi. Rentang ${days} hari (UTC).`
+        : `FIRMS membalas tanpa titik api. Baris pertama respons: ${texts.map(t => t.split('\n')[0].slice(0, 80)).join(' | ')}`;
+    } catch (err){
+      console.warn('FIRMS:', err);
+      sourceStatus.FIRMS = 'gagal';
+      $('fireHint').textContent = 'Gagal memuat titik api: ' + (err.message || 'periksa MAP_KEY dan koneksi.');
+    }
+    renderStatus();
+  }
+  function renderFires(high, rows){
+    fireLayer.clearLayers();
+    const clusters = clusterHotspots(rows, 2).sort((a, b) => b.frp - a.frp).slice(0, 400);
+    for (const c of clusters){
+      const col = FIRE_COLOR[c.conf];
+      L.circle([c.lat, c.lng], {
+        radius: c.radiusKm * 1000, color: col, weight: 1.5,
+        fillColor: col, fillOpacity: 0.18, interactive: false
+      }).addTo(fireLayer);
+      const icon = L.divIcon({
+        className: '',
+        html: `<div class="fire-icon" style="color:${col}">${FLAME_SVG}</div>`,
+        iconSize: [24, 24], iconAnchor: [12, 12]
+      });
+      L.marker([c.lat, c.lng], { icon, bubblingMouseEvents: false, title: `Titik api: ${c.n}` })
+        .bindPopup(() => firePopup(c)).addTo(fireLayer);
+    }
+    $('fireTotal').textContent = rows.length.toLocaleString('id-ID');
+    $('fireHigh').textContent = high.length.toLocaleString('id-ID');
+    const top = [...rows].sort((a, b) => b.frp - a.frp).slice(0, 5);
+    $('fireTop').innerHTML = top.map(r => `<li><button type="button" class="item" data-lat="${r.lat}" data-lng="${r.lng}">
+      <span class="mag" style="background:${FIRE_COLOR[r.conf]};color:#111">${r.frp.toFixed(0)}</span>
+      <span class="txt"><span class="place">${r.lat.toFixed(2)}, ${r.lng.toFixed(2)}</span>
+      <span class="meta">FRP ${r.frp.toFixed(1)} MW · keyakinan ${FIRE_LABEL[r.conf]} · ${esc(r.when)}</span></span>
+    </button></li>`).join('') || '<li class="hint">Tidak ada titik api dalam 24 jam terakhir.</li>';
+  }
+
+  /* ---- Pengaturan di panel ---- */
+  bindToggle('toggle-volcano', volcanoLayer);
+  bindToggle('toggle-fire', fireLayer);
+  $('firmsKey').placeholder = LS.get('firms_key', '') ? '•••••• tersimpan' : 'Tempel MAP_KEY dari NASA FIRMS';
+  $('saveFirms').addEventListener('click', () => {
+    const v = $('firmsKey').value.trim();
+    LS.set('firms_key', v);
+    $('firmsKey').value = '';
+    $('firmsKey').placeholder = v ? '•••••• tersimpan' : 'Tempel MAP_KEY dari NASA FIRMS';
+    toast(v ? 'MAP_KEY disimpan' : 'MAP_KEY dihapus');
+    loadFires();
+  });
+  $('fireThreshold').value = LS.get('fire_threshold', 25);
+  $('fireThreshold').addEventListener('change', e => {
+    const n = Math.max(1, Math.round(+e.target.value) || 25);
+    e.target.value = n;
+    LS.set('fire_threshold', n);
+  });
+  $('fireDays').value = String(LS.get('fire_days', 2));
+  $('fireDays').addEventListener('change', e => {
+    LS.set('fire_days', +e.target.value);
+    // Rentang berubah: titik lama ikut masuk, jadi jangan bunyikan notifikasi untuk itu
+    fireBooted = false; LS.set('fire_booted', false);
+    loadFires();
+  });
+  $('volcanoFeed').value = LS.get('volcano_feed', '');
+  $('saveVolcano').addEventListener('click', () => {
+    const v = $('volcanoFeed').value.trim();
+    LS.set('volcano_feed', v);
+    toast(v ? 'Feed gunung api disimpan' : 'Feed gunung api dihapus');
+    loadVolcanoFeed();
+  });
+
+  function refreshAll(){ loadQuakes(); loadBmkg(); loadVolcanoFeed(); loadFires(); }
+  function startAlerts(){
+    renderNotifUi();
+    renderVolcanoes();
+    renderAlerts();
+    loadBmkg();
+    loadVolcanoFeed();
+    loadFires();
+    setInterval(loadBmkg, CONFIG.bmkgRefreshMs);
+    setInterval(loadVolcanoFeed, CONFIG.volcanoRefreshMs);
+    setInterval(loadFires, CONFIG.fireRefreshMs);
+  }
+
+  /* ---------- 10. START ---------- */
+  if (window.innerWidth < 640) setPanel(false);
+  renderTokenHint();
+  renderPins();
+  refreshPins();
+  loadPlates();
+  loadQuakes();
+  startAlerts();
+}
+
+loadLeaflet().then(ok => {
+  if (ok) startApp();
+  else showStatus('Peta tidak bisa dimuat karena library peta tidak terjangkau. Periksa koneksi internet, lalu buka ulang file ini.');
+});
+</script>
+</body>
+</html>
