@@ -393,7 +393,7 @@ function startApp(){
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
   const TILE_STYLES = {
-    peta: () => L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    peta: () => L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=cb1_4y8k_1_7f34c11dcf1b0544d4386395', {
       attribution: '&copy; OpenStreetMap contributors &copy; CARTO', subdomains: 'abcd', maxZoom: 20
     }),
     satelit: () => L.layerGroup([
@@ -407,7 +407,7 @@ function startApp(){
     topo: () => L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
       attribution: 'Map data &copy; OpenStreetMap, SRTM | &copy; OpenTopoMap', subdomains: 'abc', maxZoom: 17
     }),
-    gelap: () => L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    gelap: () => L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=cb1_4y8k_1_7f34c11dcf1b0544d4386395', {
       attribution: '&copy; OpenStreetMap contributors &copy; CARTO', subdomains: 'abcd', maxZoom: 20
     })
   };
