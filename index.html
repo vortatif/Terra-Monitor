@@ -167,6 +167,14 @@ html.dark .leaflet-control-attribution{background:rgba(32,33,36,.8)!important;co
 .pc-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .pc-actions button{padding:4px 10px;font-size:12px}
 
+/* ---------- Kategori panel bisa dibuka & ditutup ---------- */
+.sec-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;margin:0;padding:0;border:0;border-radius:6px;background:transparent;font:inherit;font-size:inherit;font-weight:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit;cursor:pointer;text-align:left}
+.sec-toggle:hover{background:transparent;color:var(--fg)}
+.sec-toggle::after{content:"";width:6px;height:6px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin:0 4px 3px 8px;flex:none;transition:transform .2s}
+.section.collapsed .sec-toggle::after{transform:rotate(-45deg);margin:0 6px 0 8px}
+.section.collapsed > :not(h2){display:none!important}
+.section.collapsed h2{margin-bottom:0}
+
 @media (max-width:640px){
   #searchWrap{left:8px;right:8px;width:auto}
   #panel{left:8px;right:8px;top:70px;width:auto;max-height:45%}
@@ -425,6 +433,22 @@ if (window.innerWidth < 640) {
 /* ============================================================
    APP
    ============================================================ */
+/* ============================================================
+   KUNCI BAWAAN: isi sekali di sini, berlaku di browser dan
+   perangkat mana pun, tanpa perlu input lagi di panel.
+   Biarkan kosong ("") jika tidak dipakai.
+   PERINGATAN: siapa pun yang membuka source halaman bisa
+   melihat isi kunci ini. Jangan upload file ini ke situs publik
+   jika kunci tersebut berbayar atau mudah disalahgunakan.
+   ============================================================ */
+const BUILT_IN = {
+  firmsKey: 'ebeb421da726b23c10f914fa5dffe1f7',   // MAP_KEY NASA FIRMS (kebakaran / titik api)
+  tomtomKey: '31371778',                           // Kunci API TomTom (lalu lintas langsung)
+  camFeed: 'https://gist.githubusercontent.com/vortatif/97b14a431af709f2caacfaa363560583/raw/82127d25679b01b5c0bb5488b88498690be55e74/cctv-etle.json', // Feed kamera ETLE & CCTV
+  waqiToken: 'cbb1666399ff0db368324cc7c7d83dd2d8c50caf', // Token WAQI aqicn.org (kualitas udara)
+  volcanoFeed: 'https://gist.githubusercontent.com/vortatif/ad8b304efdae92f517334baab8172bf2/raw/436a9827a252fe4e71229d45b60916cf80db84be/status-gunung.json' // Feed status gunung api
+};
+
 function startApp(){
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -898,10 +922,11 @@ function startApp(){
   ];
   const aqiLevel = v => AQI_LEVELS.find(l => v <= l.max);
 
-  const getToken = () => { try { return localStorage.getItem('waqi_token') || ''; } catch (e) { return ''; } };
+  const getToken = () => { if (BUILT_IN.waqiToken) return String(BUILT_IN.waqiToken).trim(); try { return localStorage.getItem('waqi_token') || ''; } catch (e) { return ''; } };
   const setToken = t => { try { t ? localStorage.setItem('waqi_token', t) : localStorage.removeItem('waqi_token'); } catch (e) {} };
 
   function renderTokenHint(){
+    if (BUILT_IN.waqiToken){ $('tokenHint').textContent = 'Token sudah tertanam di file ini.'; return; }
     const has = !!getToken();
     $('tokenInput').placeholder = has ? '•••••• tersimpan' : 'Tempel token dari aqicn.org';
     $('tokenHint').textContent = has
@@ -1251,7 +1276,7 @@ function startApp(){
     renderVolcanoes();
   });
   async function loadVolcanoFeed(){
-    const url = LS.get('volcano_feed', '');
+    const url = String(BUILT_IN.volcanoFeed || LS.get('volcano_feed', '') || '').trim();
     if (!url){
       feedStatus = new Map();
       setVolcanoHint('Tanpa feed, atur status tiap gunung di daftar bawah sesuai info PVMBG.');
@@ -1419,7 +1444,7 @@ function startApp(){
     return FIRE_COLOR[k] ? k : 'n';
   }
   async function loadFires(){
-    const key = String(LS.get('firms_key', '') || '').trim();
+    const key = String(BUILT_IN.firmsKey || LS.get('firms_key', '') || '').trim();
     if (!key){
       sourceStatus.FIRMS = 'MAP_KEY belum diisi';
       $('fireHint').textContent = 'Isi MAP_KEY FIRMS di atas untuk melihat titik api.';
@@ -1580,7 +1605,7 @@ function startApp(){
   let camTimer = null;
   let poiCover = null, poiTimer = null, poiSeq = 0;
 
-  const getTomtomKey = () => String(LS.get('tomtom_key', '') || '').trim();
+  const getTomtomKey = () => String(BUILT_IN.tomtomKey || LS.get('tomtom_key', '') || '').trim();
   const safeUrl = u => (/^https?:\/\//i.test(u) ? u : '');
   const setTrafficHint = t => { $('trafficHint').textContent = t; };
   const setPoiHint = t => { $('poiHint').textContent = t; };
@@ -1818,7 +1843,7 @@ out center 400;`;
     };
   }
   async function loadCameraFeed(){
-    const url = String(LS.get('cam_feed', '') || '').trim();
+    const url = String(BUILT_IN.camFeed || LS.get('cam_feed', '') || '').trim();
     if (!url){
       cameraFeed = [];
       sourceStatus.Kamera = 'feed belum diisi';
@@ -1953,9 +1978,49 @@ out center 400;`;
   setInterval(styleOddEven, 60000);
   setInterval(loadCameraFeed, 5 * 60 * 1000);
 
+  /* ---- Kategori di panel bisa dibuka dan ditutup (status tersimpan di browser) ---- */
+  function makeSectionsCollapsible(){
+    const saved = LS.get('sec_collapsed', {});
+    document.querySelectorAll('#panel .section').forEach(sec => {
+      const h = sec.querySelector(':scope > h2');
+      if (!h) return;
+      const title = h.textContent.trim();
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sec-toggle';
+      btn.textContent = title;
+      h.textContent = '';
+      h.appendChild(btn);
+      const show = closed => {
+        sec.classList.toggle('collapsed', closed);
+        btn.setAttribute('aria-expanded', String(!closed));
+      };
+      show(!!saved[title]);
+      btn.addEventListener('click', () => {
+        const closed = !sec.classList.contains('collapsed');
+        show(closed);
+        const st = LS.get('sec_collapsed', {});
+        st[title] = closed;
+        LS.set('sec_collapsed', st);
+      });
+    });
+  }
+
+  /* ---- Sembunyikan kolom input untuk kunci yang sudah tertanam ---- */
+  function applyBuiltInUi(){
+    const hideRow = id => { const row = $(id) && $(id).closest('.input-row'); if (row) row.hidden = true; };
+    if (BUILT_IN.firmsKey) hideRow('firmsKey');
+    if (BUILT_IN.tomtomKey) hideRow('tomtomKey');
+    if (BUILT_IN.camFeed) hideRow('camFeed');
+    if (BUILT_IN.waqiToken) hideRow('tokenInput');
+    if (BUILT_IN.volcanoFeed) hideRow('volcanoFeed');
+  }
+
   /* ---------- 10. START ---------- */
   if (window.innerWidth < 640) setPanel(false);
   renderTokenHint();
+  applyBuiltInUi();
+  makeSectionsCollapsible();
   renderPins();
   refreshPins();
   loadPlates();
