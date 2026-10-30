@@ -153,6 +153,20 @@ html.dark .leaflet-control-attribution{background:rgba(32,33,36,.8)!important;co
 .aqi-badge{font-size:22px;font-weight:700;padding:4px 12px;border-radius:10px;font-variant-numeric:tabular-nums}
 .muted-sm{font-size:12px;color:var(--muted);line-height:1.4}
 
+/* ---------- Lalu lintas, ganjil genap, kamera, toko & gedung ---------- */
+.poi{position:relative;width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.45)}
+.poi-name{display:none;position:absolute;left:18px;top:-4px;white-space:nowrap;font-size:12px;font-weight:600;color:var(--fg);text-shadow:0 0 3px var(--surface),0 0 3px var(--surface),0 0 2px var(--surface);pointer-events:none}
+#map.poi-labels .poi-name{display:block}
+.cam-marker{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45)}
+.cam-frame{position:relative;background:#000;border-radius:8px;overflow:hidden;aspect-ratio:16/9;margin:8px 0}
+.cam-frame img{width:100%;height:100%;object-fit:cover;display:block}
+.cam-live{position:absolute;top:6px;left:6px;background:#d93025;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:.5px}
+.pc-cat{margin:0 0 2px}
+.pc-addr{margin:0 0 6px;line-height:1.4}
+.pc-traffic{margin:10px 0 4px}
+.pc-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.pc-actions button{padding:4px 10px;font-size:12px}
+
 @media (max-width:640px){
   #searchWrap{left:8px;right:8px;width:auto}
   #panel{left:8px;right:8px;top:70px;width:auto;max-height:45%}
@@ -220,6 +234,11 @@ html.dark .leaflet-control-attribution{background:rgba(32,33,36,.8)!important;co
     <label class="check"><input type="checkbox" id="toggle-plates" checked> Batas lempeng tektonik</label>
     <label class="check"><input type="checkbox" id="toggle-volcano" checked> Gunung api</label>
     <label class="check"><input type="checkbox" id="toggle-fire" checked> Titik api (kebakaran)</label>
+    <label class="check"><input type="checkbox" id="toggle-traffic" checked> Lalu lintas langsung (TomTom)</label>
+    <label class="check"><input type="checkbox" id="toggle-oddeven" checked> Ruas ganjil genap</label>
+    <label class="check"><input type="checkbox" id="toggle-cam" checked> Kamera ETLE &amp; CCTV</label>
+    <label class="check"><input type="checkbox" id="toggle-poi" checked> Nama toko &amp; gedung (zoom 16+)</label>
+    <p class="hint" id="poiHint" style="margin:0 0 6px"></p>
     <label class="check"><input type="checkbox" id="autoRefresh" checked> Perbarui otomatis tiap 60 detik</label>
     <div class="row">
       <button type="button" id="refreshBtn">Perbarui sekarang</button>
@@ -288,6 +307,38 @@ html.dark .leaflet-control-attribution{background:rgba(32,33,36,.8)!important;co
     </div>
     <p class="hint" id="volcanoHint" style="margin-top:6px">Tanpa feed, atur status tiap gunung di daftar bawah sesuai info PVMBG.</p>
     <ul class="list" id="volcanoList" style="margin-top:8px"></ul>
+  </div>
+
+  <div class="section">
+    <h2>Lalu lintas langsung</h2>
+    <p class="hint" id="trafficHint">Memuat…</p>
+    <div class="input-row" style="margin-top:8px">
+      <input type="password" id="tomtomKey" placeholder="Tempel kunci API TomTom" autocomplete="off" aria-label="Kunci API TomTom">
+      <button type="button" id="saveTomtom" class="primary">Simpan</button>
+    </div>
+    <div class="legend">
+      <span><i style="background:#18a558"></i>Lancar</span>
+      <span><i style="background:#ffb300"></i>Melambat</span>
+      <span><i style="background:#e53935"></i>Macet</span>
+    </div>
+    <p class="hint" style="margin-top:8px">Kunci gratis dari developer.tomtom.com. Warna perkiraan dan bisa kosong di area sepi.</p>
+  </div>
+
+  <div class="section">
+    <h2>Ganjil genap</h2>
+    <p class="hint" id="oeStatus">Memuat status ganjil genap…</p>
+    <p class="hint" style="margin-top:6px">Ruas diambil dari OpenStreetMap berdasarkan nama jalan. Merah = berlaku sekarang, abu-abu = tidak berlaku. Nama ruas dan jam berlaku perlu dicek ke pengumuman resmi Dishub DKI Jakarta.</p>
+  </div>
+
+  <div class="section">
+    <h2>Kamera ETLE &amp; CCTV</h2>
+    <p class="hint">Lokasi kamera ETLE tidak tersedia sebagai data terbuka. Isi dengan feed JSON milik kamu sendiri (harus bisa diakses dari browser). Setiap kamera berisi <code>name</code>, <code>type</code> (ETLE atau CCTV), <code>lat</code>, <code>lng</code>, dan <code>image</code> (URL gambar JPG yang diperbarui).</p>
+    <div class="input-row" style="margin-top:8px">
+      <input type="url" id="camFeed" placeholder="URL feed JSON kamera" aria-label="URL feed kamera">
+      <button type="button" id="saveCam" class="primary">Simpan</button>
+    </div>
+    <p class="hint" style="margin-top:6px">Atau tambah manual: klik titik di peta, lalu pilih “Tambah kamera”.</p>
+    <ul class="list" id="camList" style="margin-top:8px"></ul>
   </div>
 
   <div class="section">
@@ -391,33 +442,73 @@ function startApp(){
   /* ---------- 1. MAP & LAYERS ---------- */
   const map = L.map('map', { zoomControl: false, worldCopyJump: true }).setView([0, 115], 3);
   L.control.zoom({ position: 'bottomright' }).addTo(map);
+  // Pane terpisah: lalu lintas di atas peta dasar, label di atas lalu lintas
+  map.createPane('trafficPane').style.zIndex = 210;
+  map.createPane('labelPane').style.zIndex = 220;
 
+  // Sumber peta utama + cadangan. Jika sumber gagal dimuat, otomatis pindah ke cadangan berikutnya.
   const TILE_STYLES = {
-    peta: () => L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=cb1_4y8k_1_7f34c11dcf1b0544d4386395', {
-      attribution: '&copy; OpenStreetMap contributors &copy; CARTO', subdomains: 'abcd', maxZoom: 20
-    }),
-    satelit: () => L.layerGroup([
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics', maxZoom: 19
+    peta: [
+      () => L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors', subdomains: 'abc', maxZoom: 19
       }),
-      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
-        maxZoom: 19
+      () => L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri', maxZoom: 19
+      }),
+      () => L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO', subdomains: 'abcd', maxZoom: 20
       })
-    ]),
-    topo: () => L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-      attribution: 'Map data &copy; OpenStreetMap, SRTM | &copy; OpenTopoMap', subdomains: 'abc', maxZoom: 17
-    }),
-    gelap: () => L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=cb1_4y8k_1_7f34c11dcf1b0544d4386395', {
-      attribution: '&copy; OpenStreetMap contributors &copy; CARTO', subdomains: 'abcd', maxZoom: 20
-    })
+    ],
+    satelit: [
+      () => L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics', maxZoom: 19
+      })
+    ],
+    topo: [
+      () => L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+        attribution: 'Map data &copy; OpenStreetMap, SRTM | &copy; OpenTopoMap', subdomains: 'abc', maxZoom: 17
+      })
+    ],
+    gelap: [
+      () => L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri', maxZoom: 16
+      }),
+      () => L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO', subdomains: 'abcd', maxZoom: 20
+      })
+    ]
+  };
+  // Lapisan label di atas citra satelit dan gelap
+  const LABEL_OVERLAYS = {
+    satelit: () => L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, pane: 'labelPane' }),
+    gelap: () => L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, pane: 'labelPane' })
   };
 
-  let baseLayer = null;
-  function setMapType(key){
+  let baseLayer = null, labelLayer = null;
+  function setMapType(key, idx = 0){
     if (!TILE_STYLES[key]) key = 'peta';
+    const list = TILE_STYLES[key];
+    if (idx >= list.length){
+      showStatus('Peta tidak bisa dimuat dari semua sumber. Periksa koneksi internet, lalu muat ulang halaman.');
+      return;
+    }
     if (baseLayer) map.removeLayer(baseLayer);
-    baseLayer = TILE_STYLES[key]();
-    baseLayer.addTo(map);
+    if (labelLayer){ map.removeLayer(labelLayer); labelLayer = null; }
+    const layer = list[idx]();
+    baseLayer = layer;
+    let loaded = false, failed = 0;
+    layer.on('tileload', () => {
+      if (baseLayer !== layer) return;
+      loaded = true;
+      document.getElementById('mapStatus').hidden = true;
+    });
+    layer.on('tileerror', () => {
+      if (baseLayer !== layer || loaded) return;
+      failed++;
+      if (failed >= 4) setMapType(key, idx + 1); // sumber ini gagal, coba cadangan berikutnya
+    });
+    layer.addTo(map);
+    if (LABEL_OVERLAYS[key]){ labelLayer = LABEL_OVERLAYS[key](); labelLayer.addTo(map); }
     document.documentElement.classList.toggle('dark', key === 'gelap');
     document.querySelectorAll('.type-btn').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.type === key)));
     try { localStorage.setItem('map_type', key); } catch (e) {}
@@ -705,9 +796,8 @@ function startApp(){
     const key = ll.lat.toFixed(4) + ',' + ll.lng.toFixed(4);
     if (revCache.has(key)) return revCache.get(key);
     const j = await nomFetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&accept-language=id&lat=${ll.lat}&lon=${ll.lng}`);
-    const name = j.display_name || '';
-    revCache.set(key, name);
-    return name;
+    revCache.set(key, j);
+    return j;
   }
 
   function inspectPoint(ll, title){
@@ -717,9 +807,12 @@ function startApp(){
     el.className = 'place-card';
     el.innerHTML = `
       <div class="pc-title">${esc(title || 'Memuat alamat…')}</div>
+      <div class="pc-cat muted-sm"></div>
+      <div class="pc-addr muted-sm"></div>
       <div class="pc-coord"><span>${coordText}</span><button type="button" class="copyBtn">Salin</button></div>
       <div class="pc-aqi"><span class="muted-sm">Memuat AQI…</span></div>
-      <div><button type="button" class="pinBtn primary">Pantau lokasi ini</button></div>`;
+      <div class="pc-traffic"></div>
+      <div class="pc-actions"><button type="button" class="pinBtn primary">Pantau lokasi ini</button><button type="button" class="camBtn">Tambah kamera</button></div>`;
 
     el.querySelector('.copyBtn').addEventListener('click', () => {
       navigator.clipboard?.writeText(coordText)
@@ -729,21 +822,30 @@ function startApp(){
     el.querySelector('.pinBtn').addEventListener('click', () => {
       addPin(ll, placeName || coordText);
     });
+    el.querySelector('.camBtn').addEventListener('click', () => addManualCamera(ll, placeName || coordText));
 
     const popup = L.popup({ maxWidth: 320, autoPanPadding: [60, 60] })
       .setLatLng(ll).setContent(el).openOn(map);
 
-    if (!title){
-      reverseName(ll)
-        .then(name => {
-          placeName = name || coordText;
-          el.querySelector('.pc-title').textContent = name || 'Lokasi tanpa nama alamat';
-        })
-        .catch(() => {
+    reverseName(ll)
+      .then(j => {
+        const full = j.display_name || '';
+        const nm = j.name || (j.address && j.address.road) || full || '';
+        if (!title){
+          placeName = nm || coordText;
+          el.querySelector('.pc-title').textContent = nm || 'Lokasi tanpa nama alamat';
+        }
+        const shown = title || nm;
+        el.querySelector('.pc-addr').textContent = full && full !== shown ? full : '';
+        const cat = [j.category, j.type].filter(v => v && v !== 'yes').map(v => String(v).replace(/_/g, ' ')).join(' · ');
+        el.querySelector('.pc-cat').textContent = cat ? 'Jenis: ' + cat : '';
+      })
+      .catch(() => {
+        if (!title){
           placeName = coordText;
           el.querySelector('.pc-title').textContent = 'Alamat tidak tersedia';
-        });
-    }
+        }
+      });
 
     const aqiBox = el.querySelector('.pc-aqi');
     if (!getToken()){
@@ -753,6 +855,19 @@ function startApp(){
         .then(d => renderAqiBlock(aqiBox, d))
         .catch(err => { aqiBox.innerHTML = `<span class="muted-sm">${esc(aqiErrorText(err))}</span>`; });
     }
+    const trafBox = el.querySelector('.pc-traffic');
+    const loadTraffic = () => {
+      if (!getTomtomKey()){
+        trafBox.innerHTML = '<span class="muted-sm">Isi kunci TomTom di panel untuk melihat kecepatan lalu lintas di titik ini.</span>';
+        return;
+      }
+      fetchFlow(ll.lat, ll.lng)
+        .then(d => flowBlock(trafBox, d))
+        .catch(() => { trafBox.innerHTML = '<span class="muted-sm">Tidak ada data lalu lintas di titik ini.</span>'; });
+    };
+    loadTraffic();
+    const trafTimer = setInterval(loadTraffic, 60000);
+    popup.on('remove', () => clearInterval(trafTimer));
     return popup;
   }
 
@@ -1424,7 +1539,7 @@ function startApp(){
     loadVolcanoFeed();
   });
 
-  function refreshAll(){ loadQuakes(); loadBmkg(); loadVolcanoFeed(); loadFires(); }
+  function refreshAll(){ loadQuakes(); loadBmkg(); loadVolcanoFeed(); loadFires(); loadCameraFeed(); syncTraffic(); }
   function startAlerts(){
     renderNotifUi();
     renderVolcanoes();
@@ -1436,6 +1551,407 @@ function startApp(){
     setInterval(loadVolcanoFeed, CONFIG.volcanoRefreshMs);
     setInterval(loadFires, CONFIG.fireRefreshMs);
   }
+
+  /* ============================================================
+     12. LALU LINTAS, GANJIL GENAP, KAMERA, TOKO & GEDUNG
+     ============================================================ */
+  const WIB_MS = 7 * 3600 * 1000;
+  const JAKARTA_BBOX = '-6.40,106.68,-6.08,106.98'; // selatan, barat, utara, timur
+  const OVERPASS_URLS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter'
+  ];
+  // Nama ruas yang sering disebut ganjil genap. Cocokkan dengan pengumuman resmi Dishub DKI Jakarta.
+  const ODD_EVEN_ROADS = ['Sudirman', 'Thamrin', 'Gatot Subroto', 'Rasuna Said', 'Sutoyo', 'Parman', 'Fatmawati', 'Gajah Mada', 'Hayam Wuruk'];
+  const OE_START = 6, OE_END = 21; // jam WIB, Senin sampai Jumat
+  const POI_MIN_ZOOM = 16;
+  const CAM_REFRESH_MS = 15 * 1000;
+  const CAM_PATH = 'M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z';
+  const CAM_COLOR = { ETLE: '#d93025', CCTV: '#1a73e8' };
+
+  const trafficGroup = L.layerGroup();
+  const oddEvenGroup = L.layerGroup();
+  const cameraGroup = L.layerGroup();
+  const poiGroup = L.layerGroup();
+  let trafficTile = null;
+  let oddEvenLines = [];
+  let cameraFeed = [];
+  const camMarkers = new Map();
+  let camTimer = null;
+  let poiCover = null, poiTimer = null, poiSeq = 0;
+
+  const getTomtomKey = () => String(LS.get('tomtom_key', '') || '').trim();
+  const safeUrl = u => (/^https?:\/\//i.test(u) ? u : '');
+  const setTrafficHint = t => { $('trafficHint').textContent = t; };
+  const setPoiHint = t => { $('poiHint').textContent = t; };
+  const camAll = () => [...cameraFeed, ...LS.get('cam_manual', []).map(c => ({ ...c, src: 'manual' }))];
+  function bindLayerToggle(id, layer, onOn){
+    const apply = () => {
+      if ($(id).checked){ map.addLayer(layer); if (onOn) onOn(); }
+      else map.removeLayer(layer);
+    };
+    $(id).addEventListener('change', apply);
+    apply();
+  }
+
+  /* ---- Lalu lintas langsung (TomTom flow tiles) ---- */
+  function trafficUrl(key){
+    // Penanda waktu tiap 2 menit agar tile tidak diambil dari cache browser
+    return `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?tileSize=256&key=${encodeURIComponent(key)}&t=${Math.floor(Date.now() / 120000)}`;
+  }
+  function syncTraffic(){
+    const key = getTomtomKey();
+    if (!key){
+      trafficGroup.clearLayers();
+      trafficTile = null;
+      setTrafficHint('Isi kunci TomTom di bawah untuk melihat kemacetan langsung. Tanpa kunci, peta tetap berfungsi.');
+      return;
+    }
+    if (!trafficTile){
+      trafficTile = L.tileLayer(trafficUrl(key), { pane: 'trafficPane', opacity: 0.85, maxZoom: 19, attribution: 'Lalu lintas &copy; TomTom' });
+      trafficTile.on('tileload', () => setTrafficHint(`Aktif, diperbarui ${new Date().toLocaleTimeString('id-ID')}. Hijau lancar, kuning melambat, merah macet.`));
+      trafficTile.on('tileerror', () => setTrafficHint('Tile lalu lintas belum bisa dimuat. Periksa kunci TomTom, kuota, dan koneksi.'));
+      trafficGroup.addLayer(trafficTile);
+    } else {
+      trafficTile.setUrl(trafficUrl(key));
+    }
+  }
+  async function fetchFlow(lat, lng){
+    const url = `https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json?point=${lat.toFixed(5)},${lng.toFixed(5)}&unit=KMPH&key=${encodeURIComponent(getTomtomKey())}`;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const f = (await res.json()).flowSegmentData;
+    if (!f || !Number.isFinite(f.currentSpeed)) throw new Error('NO_DATA');
+    return { current: f.currentSpeed, free: f.freeFlowSpeed, closed: !!f.roadClosure };
+  }
+  function flowBlock(box, d){
+    if (d.closed){
+      box.innerHTML = '<span class="chip" style="background:#e53935;color:#fff">Ditutup</span> <span class="muted-sm">Jalan terdekat ditutup menurut data lalu lintas.</span>';
+      return;
+    }
+    const r = d.free > 0 ? d.current / d.free : 1;
+    const [label, bg, fg] = r >= 0.8 ? ['Lancar', '#18a558', '#fff'] : r >= 0.5 ? ['Melambat', '#ffb300', '#202124'] : ['Macet', '#e53935', '#fff'];
+    box.innerHTML = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span class="chip" style="background:${bg};color:${fg}">${label}</span>
+      <span class="muted-sm">Sekitar ${Math.round(d.current)} km/jam · bebas hambatan ${Math.round(d.free)} km/jam<br>Jalan terdekat, diperbarui tiap 60 dtk</span>
+    </div>`;
+  }
+
+  /* ---- Ganjil genap: ruas dari OpenStreetMap, status dihitung dari jam WIB ---- */
+  function oddEvenNow(){
+    const w = new Date(Date.now() + WIB_MS); // getUTC* di sini berarti jam dinding WIB
+    const hour = w.getUTCHours() + w.getUTCMinutes() / 60;
+    const weekday = w.getUTCDay() >= 1 && w.getUTCDay() <= 5;
+    return { active: weekday && hour >= OE_START && hour < OE_END, even: w.getUTCDate() % 2 === 0 };
+  }
+  function oddEvenText(s){
+    const p = s.even ? 'genap' : 'ganjil';
+    const o = s.even ? 'ganjil' : 'genap';
+    const jadwal = `Senin–Jumat, pukul ${String(OE_START).padStart(2, '0')}.00–${String(OE_END).padStart(2, '0')}.00 WIB`;
+    return s.active
+      ? `Berlaku sekarang (${jadwal}). Hari ini tanggal ${p}: pelat nomor ${p} boleh lewat, pelat nomor ${o} dilarang.`
+      : `Sedang tidak berlaku. Jadwal: ${jadwal}. Hari ini tanggal ${p}.`;
+  }
+  function styleOddEven(){
+    const s = oddEvenNow();
+    for (const l of oddEvenLines){
+      l.setStyle({
+        color: s.active ? '#d93025' : '#9aa0a6',
+        weight: s.active ? 5 : 4,
+        opacity: s.active ? 0.95 : 0.8,
+        dashArray: s.active ? null : '6 6'
+      });
+    }
+    $('oeStatus').textContent = oddEvenText(s);
+  }
+  function oddEvenPopup(name, s){
+    return `<div style="min-width:220px">
+      <div style="font-size:15px;font-weight:700">${esc(name || 'Ruas ganjil genap')}</div>
+      <div class="chip" style="margin:8px 0;background:${s.active ? '#d93025' : '#9aa0a6'};color:#fff">${s.active ? 'Berlaku sekarang' : 'Tidak berlaku'}</div>
+      <div class="muted-sm">${esc(oddEvenText(s))}</div>
+      <div class="muted-sm" style="margin-top:6px">Aturan ini perkiraan. Cek pengumuman resmi Dishub DKI Jakarta.</div>
+    </div>`;
+  }
+  async function loadOddEven(){
+    try {
+      const data = await overpass(`[out:json][timeout:30];way["name"~"${ODD_EVEN_ROADS.join('|')}"](${JAKARTA_BBOX});out geom;`);
+      oddEvenGroup.clearLayers();
+      oddEvenLines = [];
+      for (const w of data.elements || []){
+        if (!w.geometry || w.geometry.length < 2) continue;
+        const name = w.tags && w.tags.name;
+        const line = L.polyline(w.geometry.map(p => [p.lat, p.lon]), { weight: 5, bubblingMouseEvents: false })
+          .bindPopup(() => oddEvenPopup(name, oddEvenNow()));
+        line.addTo(oddEvenGroup);
+        oddEvenLines.push(line);
+      }
+      styleOddEven();
+    } catch (err){
+      console.warn('Ganjil genap:', err);
+      $('oeStatus').textContent = `Ruas belum bisa dimuat dari OpenStreetMap, akan dicoba lagi. ${oddEvenText(oddEvenNow())}`;
+      setTimeout(loadOddEven, 60000);
+    }
+  }
+
+  /* ---- Overpass (OpenStreetMap): toko dan nama gedung ---- */
+  async function overpass(query){
+    let lastErr = new Error('Server Overpass tidak merespons');
+    for (const url of OVERPASS_URLS){
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'data=' + encodeURIComponent(query)
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return await res.json();
+      } catch (err){ lastErr = err; }
+    }
+    throw lastErr;
+  }
+  function poiQuery(b){
+    const bb = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()].map(v => v.toFixed(5)).join(',');
+    return `[out:json][timeout:25];
+(
+  nwr["name"]["shop"](${bb});
+  nwr["name"]["amenity"~"^(restaurant|cafe|fast_food|hospital|clinic|pharmacy|bank|atm|fuel|school|university|college|marketplace|cinema|place_of_worship)$"](${bb});
+  nwr["name"]["tourism"~"^(hotel|guest_house|hostel|museum|attraction|gallery)$"](${bb});
+  nwr["name"]["office"](${bb});
+  nwr["name"]["building"](${bb});
+);
+out center 400;`;
+  }
+  function poiCategory(t){
+    const a = t.amenity || '';
+    if (t.shop) return ['Toko', '#ef6c00'];
+    if (/^(restaurant|cafe|fast_food)$/.test(a)) return ['Makan & minum', '#f9a825'];
+    if (/^(hospital|clinic|pharmacy)$/.test(a)) return ['Kesehatan', '#e53935'];
+    if (/^(bank|atm)$/.test(a)) return ['Bank & ATM', '#1e88e5'];
+    if (a === 'fuel') return ['SPBU', '#8e24aa'];
+    if (/^(school|university|college)$/.test(a)) return ['Pendidikan', '#43a047'];
+    if (a === 'marketplace') return ['Pasar', '#ef6c00'];
+    if (a === 'cinema') return ['Bioskop', '#5e35b1'];
+    if (a === 'place_of_worship') return ['Tempat ibadah', '#6d4c41'];
+    if (t.tourism) return ['Wisata & penginapan', '#00838f'];
+    if (t.office) return ['Kantor', '#3949ab'];
+    if (t.building) return ['Gedung', '#546e7a'];
+    return ['Lokasi', '#546e7a'];
+  }
+  function addPoiMarker(el, lat, lng){
+    const t = el.tags;
+    const [cat, col] = poiCategory(t);
+    const icon = L.divIcon({
+      className: '',
+      html: `<div class="poi" style="background:${col}"><span class="poi-name">${esc(t.name)}</span></div>`,
+      iconSize: [14, 14], iconAnchor: [7, 7]
+    });
+    L.marker([lat, lng], { icon, title: `${t.name} · ${cat}`, bubblingMouseEvents: false, keyboard: false })
+      .bindPopup(() => poiPopup(el, cat, col))
+      .addTo(poiGroup);
+  }
+  function poiPopup(el, cat, col){
+    const t = el.tags;
+    const addr = [t['addr:housenumber'], t['addr:street']].filter(Boolean).join(' ');
+    const area = [t['addr:subdistrict'] || t['addr:suburb'] || t['addr:village'], t['addr:city'] || t['addr:district']].filter(Boolean).join(', ');
+    const phone = t.phone || t['contact:phone'];
+    const web = t.website || t['contact:website'] || '';
+    return `<div style="min-width:220px">
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">${esc(t.name)}</div>
+      <span class="chip" style="background:${col};color:#fff">${esc(cat)}</span>
+      <div style="margin-top:8px;line-height:1.5">
+        ${addr ? `<div>${esc(addr)}</div>` : ''}
+        ${area ? `<div class="muted-sm">${esc(area)}</div>` : ''}
+        ${t.opening_hours ? `<div class="muted-sm" style="margin-top:4px">Jam buka: ${esc(t.opening_hours)}</div>` : ''}
+        ${phone ? `<div class="muted-sm">Telp: ${esc(phone)}</div>` : ''}
+      </div>
+      <div style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap">
+        ${/^https?:\/\//i.test(web) ? `<a href="${esc(web)}" target="_blank" rel="noopener">Situs web ↗</a>` : ''}
+        <a href="https://www.openstreetmap.org/${el.type}/${el.id}" target="_blank" rel="noopener">Sumber OSM ↗</a>
+      </div>
+    </div>`;
+  }
+  function schedulePois(){ clearTimeout(poiTimer); poiTimer = setTimeout(loadPois, 600); }
+  async function loadPois(){
+    const seq = ++poiSeq;
+    if (!map.hasLayer(poiGroup)) return;
+    if (map.getZoom() < POI_MIN_ZOOM){
+      poiGroup.clearLayers();
+      poiCover = null;
+      setPoiHint(`Perbesar sampai zoom ${POI_MIN_ZOOM} untuk melihat nama toko dan gedung.`);
+      return;
+    }
+    const view = map.getBounds();
+    if (poiCover && poiCover.contains(view)) return;
+    setPoiHint('Memuat toko dan gedung…');
+    const area = view.pad(0.25);
+    try {
+      const data = await overpass(poiQuery(area));
+      if (seq !== poiSeq) return;
+      poiGroup.clearLayers();
+      let n = 0;
+      for (const el of data.elements || []){
+        const lat = el.lat ?? (el.center && el.center.lat);
+        const lng = el.lon ?? (el.center && el.center.lon);
+        if (!el.tags || !el.tags.name || !Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+        addPoiMarker(el, lat, lng);
+        n++;
+      }
+      poiCover = area;
+      setPoiHint(n ? `${n} toko dan gedung bernama di area ini. Klik nama untuk detail.` : 'Tidak ada toko atau gedung bernama di area ini.');
+    } catch (err){
+      console.warn('POI:', err);
+      if (seq === poiSeq) setPoiHint('Gagal memuat toko dan gedung. Server data sedang sibuk, coba geser peta lagi.');
+    }
+  }
+
+  /* ---- Kamera ETLE & CCTV: dari feed JSON milik kamu, atau ditambah manual ---- */
+  function normalizeCamera(c, id){
+    if (!c) return null;
+    const lat = Number(c.lat ?? c.latitude), lng = Number(c.lng ?? c.lon ?? c.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+    const type = /etle/i.test(String(c.type || '')) ? 'ETLE' : 'CCTV';
+    return {
+      id, src: 'feed', type, lat, lng,
+      name: String(c.name || (type === 'ETLE' ? 'Kamera ETLE' : 'Kamera CCTV')),
+      image: safeUrl(String(c.image || c.snapshot || '').trim()),
+      link: safeUrl(String(c.link || c.url || '').trim())
+    };
+  }
+  async function loadCameraFeed(){
+    const url = String(LS.get('cam_feed', '') || '').trim();
+    if (!url){
+      cameraFeed = [];
+      sourceStatus.Kamera = 'feed belum diisi';
+    } else {
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const json = await res.json();
+        const rows = Array.isArray(json) ? json : (json.cameras || json.data || []);
+        cameraFeed = rows.map((c, i) => normalizeCamera(c, 'f' + i)).filter(Boolean);
+        sourceStatus.Kamera = 'aktif (' + cameraFeed.length + ')';
+      } catch (err){
+        console.warn('Feed kamera:', err);
+        sourceStatus.Kamera = 'feed gagal dibaca';
+      }
+    }
+    renderStatus();
+    renderCameras();
+  }
+  function renderCameras(){
+    const all = camAll();
+    cameraGroup.clearLayers();
+    camMarkers.clear();
+    for (const cam of all){
+      const icon = L.divIcon({
+        className: '',
+        html: `<div class="cam-marker" style="background:${CAM_COLOR[cam.type] || '#5f6368'}">${svg(CAM_PATH, 15)}</div>`,
+        iconSize: [26, 26], iconAnchor: [13, 13]
+      });
+      const m = L.marker([cam.lat, cam.lng], { icon, title: cam.name, bubblingMouseEvents: false, keyboard: false })
+        .bindPopup(() => cameraCard(cam))
+        .addTo(cameraGroup);
+      camMarkers.set(cam.id, m);
+    }
+    $('camList').innerHTML = all.length ? all.slice(0, 40).map(cam => `
+      <li class="vol-row">
+        <span class="chip" style="background:${CAM_COLOR[cam.type] || '#5f6368'};color:#fff">${esc(cam.type)}</span>
+        <button type="button" class="place-btn" data-cam="${esc(cam.id)}">${esc(cam.name)}</button>
+        ${cam.src === 'manual' ? `<button type="button" data-remove-cam="${esc(cam.id)}" aria-label="Hapus kamera">✕</button>` : ''}
+      </li>`).join('')
+      : '<li class="hint">Belum ada kamera. Isi feed JSON di atas atau tambahkan lewat klik peta.</li>';
+  }
+  function cameraCard(cam){
+    const el = document.createElement('div');
+    el.className = 'place-card';
+    el.innerHTML = `
+      <div class="pc-title">${esc(cam.name)}</div>
+      <div style="margin:6px 0"><span class="chip" style="background:${CAM_COLOR[cam.type] || '#5f6368'};color:#fff">${esc(cam.type)}</span></div>
+      ${cam.image
+        ? `<div class="cam-frame"><img class="cam-img" alt="Gambar ${esc(cam.name)}" data-src="${esc(cam.image)}"><span class="cam-live">LIVE</span></div>
+           <div class="muted-sm">Gambar diperbarui tiap 15 detik selama popup terbuka.</div>`
+        : '<div class="muted-sm">Kamera ini belum punya URL gambar. Buka sumbernya untuk melihat.</div>'}
+      ${cam.link ? `<div style="margin-top:8px"><a href="${esc(cam.link)}" target="_blank" rel="noopener">Buka sumber kamera ↗</a></div>` : ''}`;
+    return el;
+  }
+  function addManualCamera(ll, place){
+    const name = (prompt('Nama kamera:', place) || '').trim();
+    if (!name) return;
+    const kind = (prompt('Jenis kamera: ketik ETLE atau CCTV', 'CCTV') || '').trim();
+    const image = safeUrl((prompt('URL gambar snapshot (JPG, diperbarui otomatis). Kosongkan jika belum ada:', '') || '').trim());
+    const list = LS.get('cam_manual', []);
+    if (list.length >= 100){ toast('Maksimal 100 kamera manual'); return; }
+    list.push({ id: 'm' + Date.now().toString(36), name, type: /etle/i.test(kind) ? 'ETLE' : 'CCTV', lat: ll.lat, lng: ll.lng, image, link: '' });
+    LS.set('cam_manual', list);
+    map.closePopup();
+    renderCameras();
+    toast(map.hasLayer(cameraGroup) ? 'Kamera ditambahkan' : 'Kamera ditambahkan. Aktifkan “Kamera ETLE & CCTV” untuk melihatnya.');
+  }
+  function removeManualCamera(id){
+    LS.set('cam_manual', LS.get('cam_manual', []).filter(c => c.id !== id));
+    renderCameras();
+  }
+
+  /* ---- Pengaturan & inisialisasi lapisan baru ---- */
+  map.on('moveend', schedulePois);
+  const syncPoiLabels = () => $('map').classList.toggle('poi-labels', map.getZoom() >= 17);
+  map.on('zoomend', syncPoiLabels);
+  syncPoiLabels();
+
+  // Gambar kamera diperbarui otomatis selama popup-nya terbuka
+  map.on('popupopen', e => {
+    const img = e.popup.getElement()?.querySelector('img.cam-img');
+    if (!img) return;
+    const base = img.dataset.src;
+    const tick = () => { img.src = base + (base.indexOf('?') >= 0 ? '&' : '?') + 'ts=' + Date.now(); };
+    img.onerror = () => { img.alt = 'Gambar kamera tidak bisa dimuat'; img.style.opacity = '0.35'; };
+    tick();
+    clearInterval(camTimer);
+    camTimer = setInterval(tick, CAM_REFRESH_MS);
+  });
+  map.on('popupclose', () => clearInterval(camTimer));
+
+  $('tomtomKey').placeholder = getTomtomKey() ? '•••••• tersimpan' : 'Tempel kunci API TomTom';
+  $('saveTomtom').addEventListener('click', () => {
+    const v = $('tomtomKey').value.trim();
+    LS.set('tomtom_key', v);
+    $('tomtomKey').value = '';
+    $('tomtomKey').placeholder = v ? '•••••• tersimpan' : 'Tempel kunci API TomTom';
+    toast(v ? 'Kunci TomTom disimpan' : 'Kunci TomTom dihapus');
+    syncTraffic();
+  });
+  $('camFeed').value = LS.get('cam_feed', '');
+  $('saveCam').addEventListener('click', () => {
+    const v = $('camFeed').value.trim();
+    LS.set('cam_feed', v);
+    toast(v ? 'Feed kamera disimpan' : 'Feed kamera dihapus');
+    loadCameraFeed();
+  });
+  $('camList').addEventListener('click', e => {
+    const rm = e.target.closest('[data-remove-cam]');
+    if (rm){ removeManualCamera(rm.dataset.removeCam); return; }
+    const b = e.target.closest('button[data-cam]');
+    if (!b) return;
+    const cam = camAll().find(c => c.id === b.dataset.cam);
+    if (!cam) return;
+    if (!map.hasLayer(cameraGroup)){ toast('Aktifkan “Kamera ETLE & CCTV” untuk melihat kamera'); return; }
+    const m = camMarkers.get(cam.id);
+    map.flyTo([cam.lat, cam.lng], Math.max(map.getZoom(), 16), { duration: 1.2 });
+    if (m) map.once('moveend', () => m.openPopup());
+  });
+
+  bindLayerToggle('toggle-traffic', trafficGroup);
+  bindLayerToggle('toggle-oddeven', oddEvenGroup);
+  bindLayerToggle('toggle-cam', cameraGroup);
+  bindLayerToggle('toggle-poi', poiGroup, () => loadPois());
+  syncTraffic();
+  styleOddEven();
+  loadOddEven();
+  loadCameraFeed();
+
+  setInterval(() => { if (trafficTile && map.hasLayer(trafficGroup)) trafficTile.setUrl(trafficUrl(getTomtomKey())); }, 120000);
+  setInterval(styleOddEven, 60000);
+  setInterval(loadCameraFeed, 5 * 60 * 1000);
 
   /* ---------- 10. START ---------- */
   if (window.innerWidth < 640) setPanel(false);
